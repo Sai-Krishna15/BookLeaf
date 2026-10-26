@@ -15,6 +15,8 @@ const envSchema = z
     DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
     // Direct (non-pooled) URL, used only by Prisma migrations (prisma.config.ts).
     DATABASE_URL_UNPOOLED: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+    // Dedicated database for automated tests. Required (and enforced) when NODE_ENV=test.
+    DATABASE_URL_TEST: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
     JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
     JWT_EXPIRES_IN: z.string().min(1).default('1d'),
     CLIENT_ORIGIN: z.string().url(),
@@ -35,6 +37,15 @@ const envSchema = z
         code: 'custom',
         path: ['GEMINI_API_KEY'],
         message: 'GEMINI_API_KEY is required when AI_ENABLED=true',
+      });
+    }
+    // Defence in depth: tests/setup.ts repoints DATABASE_URL at the test DB. If NODE_ENV=test is
+    // ever used without that, refuse to start rather than touch the main database.
+    if (env.NODE_ENV === 'test' && (!env.DATABASE_URL_TEST || env.DATABASE_URL !== env.DATABASE_URL_TEST)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['DATABASE_URL'],
+        message: 'NODE_ENV=test requires DATABASE_URL to equal DATABASE_URL_TEST (tests must not use the main database)',
       });
     }
   });

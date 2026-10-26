@@ -10,6 +10,8 @@ import { notFound } from './middleware/notFound';
 import { globalRateLimiter } from './middleware/rateLimiter';
 import { requestId } from './middleware/requestId';
 import { healthRouter } from './modules/health/health.routes';
+import { authProtectedRouter, authPublicRouter } from './modules/auth/auth.routes';
+import { authenticate } from './middleware/authenticate';
 
 export function createApp(): Express {
   const app = express();
@@ -43,7 +45,15 @@ export function createApp(): Express {
   app.use(express.json({ limit: JSON_BODY_LIMIT }));
   app.use(API_PREFIX, globalRateLimiter);
 
+  // ---- PUBLIC routes: the only two that skip authentication (PROJECT_CONTEXT §7) ----
   app.use(`${API_PREFIX}/health`, healthRouter);
+  app.use(`${API_PREFIX}/auth`, authPublicRouter); // POST /login
+
+  // ---- PROTECTED by default: everything mounted below this line requires a valid JWT. ----
+  // To add a route, mount it below. Never mount a new router above this line unless it must be public.
+  app.use(API_PREFIX, authenticate);
+  app.use(`${API_PREFIX}/auth`, authProtectedRouter); // GET /me
+  // Phase 4+: books, tickets, admin (admin routers also use requireRole('ADMIN')).
 
   app.use(notFound);
   app.use(errorHandler);

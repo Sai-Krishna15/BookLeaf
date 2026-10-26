@@ -1,6 +1,7 @@
 import { prisma } from '../../config/prisma';
 
-const PING_TIMEOUT_MS = 3000;
+// Generous enough for a cold pooled connection (TCP + TLS + auth) to a remote/serverless DB.
+const PING_TIMEOUT_MS = 5000;
 
 export const healthRepository = {
   /** Returns true if a trivial query round-trips within the timeout. Never throws. */

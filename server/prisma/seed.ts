@@ -1,8 +1,10 @@
-/* Idempotent seed (PROJECT_CONTEXT §11). Safe to run repeatedly: every write is an upsert.
+/* Idempotent seed (PROJECT_CONTEXT §11). Safe to run repeatedly.
  *
- * - Reference data (authors, books, users) is overwritten from the JSON on each run.
- * - Demo tickets/messages use fixed ids and `update: {}`, so re-running never duplicates them
- *   AND never clobbers changes made through the app. Use `npm run db:reset` for a clean slate.
+ * - Reference data (authors, books, users) is upserted from the JSON on each run, concurrently over
+ *   the connection pool (one round trip per row, but ~10 in flight), so edits to the JSON apply.
+ * - Demo tickets/messages are inserted with fixed ids via createMany({ skipDuplicates }): one query
+ *   each, never duplicates, and never clobbers changes made through the app.
+ *   Use `npm run db:reset` for a clean slate.
  */
 import 'dotenv/config';
 import { readFileSync } from 'node:fs';
@@ -312,22 +314,23 @@ export interface SeedSummary {
 
 export async function runSeed(prisma: PrismaClient, log: (m: string) => void = () => {}): Promise<SeedSummary> {
   const authors = loadData();
-  const authorHash = await bcrypt.hash(AUTHOR_PASSWORD, BCRYPT_COST);
-  const adminHash = await bcrypt.hash(ADMIN_PASSWORD, BCRYPT_COST);
+  const [authorHash, adminHash] = await Promise.all([
+    bcrypt.hash(AUTHOR_PASSWORD, BCRYPT_COST),
+    bcrypt.hash(ADMIN_PASSWORD, BCRYPT_COST),
+  ]);
 
-  // Authors + books (stored values are the source of truth, nothing is recomputed).
-  for (const a of authors) {
-    const authorData = {
-      name: a.name,
-      email: a.email,
-      phone: a.phone,
-      city: a.city,
-      joinedDate: new Date(a.joined_date),
-    };
-    await prisma.author.upsert({ where: { id: a.author_id }, create: { id: a.author_id, ...authorData }, update: authorData });
+  // 1) Authors (stored values are the source of truth, nothing is recomputed).
+  await Promise.all(
+    authors.map((a) => {
+      const data = { name: a.name, email: a.email, phone: a.phone, city: a.city, joinedDate: new Date(a.joined_date) };
+      return prisma.author.upsert({ where: { id: a.author_id }, create: { id: a.author_id, ...data }, update: data });
+    }),
+  );
 
-    for (const b of a.books) {
-      const bookData = {
+  // 2) Books + users depend only on authors, so they run concurrently with each other.
+  const bookUpserts = authors.flatMap((a) =>
+    a.books.map((b) => {
+      const data = {
         authorId: a.author_id,
         title: b.title,
         isbn: b.isbn,
@@ -344,81 +347,80 @@ export async function runSeed(prisma: PrismaClient, log: (m: string) => void = (
         printPartner: b.print_partner,
         availableOn: b.available_on,
       };
-      await prisma.book.upsert({ where: { id: b.book_id }, create: { id: b.book_id, ...bookData }, update: bookData });
-    }
-  }
-  log(`authors/books upserted`);
+      return prisma.book.upsert({ where: { id: b.book_id }, create: { id: b.book_id, ...data }, update: data });
+    }),
+  );
+  const userUpserts = [
+    ...authors.map((a) => {
+      const data = { name: a.name, role: Role.AUTHOR, authorId: a.author_id, passwordHash: authorHash };
+      return prisma.user.upsert({ where: { email: a.email }, create: { email: a.email, ...data }, update: data });
+    }),
+    ...ADMINS.map((adm) => {
+      const data = { name: adm.name, role: Role.ADMIN, passwordHash: adminHash };
+      return prisma.user.upsert({ where: { email: adm.email }, create: { email: adm.email, ...data }, update: data });
+    }),
+  ];
+  await Promise.all([...bookUpserts, ...userUpserts]);
+  log('authors, books, users upserted');
 
-  // Users: one per author + admins.
-  for (const a of authors) {
-    const data = { name: a.name, role: Role.AUTHOR, authorId: a.author_id, passwordHash: authorHash };
-    await prisma.user.upsert({ where: { email: a.email }, create: { email: a.email, ...data }, update: data });
-  }
-  const adminIds: Record<'admin1' | 'admin2', string> = { admin1: '', admin2: '' };
-  for (const [i, adm] of ADMINS.entries()) {
-    const data = { name: adm.name, role: Role.ADMIN, passwordHash: adminHash };
-    const u = await prisma.user.upsert({ where: { email: adm.email }, create: { email: adm.email, ...data }, update: data });
-    adminIds[i === 0 ? 'admin1' : 'admin2'] = u.id;
-  }
-  log(`users upserted`);
+  // 3) Resolve user ids with ONE query.
+  const users = await prisma.user.findMany({ select: { id: true, email: true, authorId: true } });
+  const adminIds = {
+    admin1: users.find((u) => u.email === ADMINS[0]!.email)!.id,
+    admin2: users.find((u) => u.email === ADMINS[1]!.email)!.id,
+  };
+  const authorUserId = new Map(users.filter((u) => u.authorId).map((u) => [u.authorId as string, u.id]));
 
-  // Demo tickets + messages (fixed ids => idempotent; update:{} => never overwrite live data).
-  for (const t of TICKETS) {
-    const authorUser = await prisma.user.findUniqueOrThrow({ where: { authorId: t.authorId } });
-    const id = `seed-ticket-${t.number}`;
-    await prisma.ticket.upsert({
-      where: { id },
-      update: {},
-      create: {
-        id,
-        ticketNumber: t.number,
-        authorId: t.authorId,
-        bookId: t.bookId,
-        subject: t.subject,
-        description: t.description,
-        status: t.status,
-        category: t.category,
-        categorySource: t.source,
-        priority: t.priority,
-        prioritySource: t.source,
-        aiStatus: t.aiStatus,
-        aiReasoning: t.aiReasoning ?? null,
-        aiError: t.aiError ?? null,
-        needsManualTriage: t.needsManualTriage ?? false,
-        assignedToId: t.assignedTo ? adminIds[t.assignedTo] : null,
-        firstResponseAt: t.firstResponseHoursAgo !== undefined ? hoursAgo(t.firstResponseHoursAgo) : null,
-        resolvedAt: t.resolvedHoursAgo !== undefined ? hoursAgo(t.resolvedHoursAgo) : null,
-        createdAt: hoursAgo(t.createdHoursAgo),
-      },
-    });
+  // 4) Demo tickets + messages: fixed ids, insert-only (skipDuplicates keeps it idempotent).
+  await prisma.ticket.createMany({
+    skipDuplicates: true,
+    data: TICKETS.map((t) => ({
+      id: `seed-ticket-${t.number}`,
+      ticketNumber: t.number,
+      authorId: t.authorId,
+      bookId: t.bookId,
+      subject: t.subject,
+      description: t.description,
+      status: t.status,
+      category: t.category,
+      categorySource: t.source,
+      priority: t.priority,
+      prioritySource: t.source,
+      aiStatus: t.aiStatus,
+      aiReasoning: t.aiReasoning ?? null,
+      aiError: t.aiError ?? null,
+      needsManualTriage: t.needsManualTriage ?? false,
+      assignedToId: t.assignedTo ? adminIds[t.assignedTo] : null,
+      firstResponseAt: t.firstResponseHoursAgo !== undefined ? hoursAgo(t.firstResponseHoursAgo) : null,
+      resolvedAt: t.resolvedHoursAgo !== undefined ? hoursAgo(t.resolvedHoursAgo) : null,
+      createdAt: hoursAgo(t.createdHoursAgo),
+    })),
+  });
 
-    // The author's original query is also the first thread message.
-    const thread: SeedMessage[] = [
-      { from: 'author', type: MessageType.AUTHOR_MESSAGE, body: t.description, hoursAgo: t.createdHoursAgo },
-      ...t.messages,
-    ];
-    for (const [i, m] of thread.entries()) {
-      const mid = `seed-msg-${t.number}-${i + 1}`;
-      await prisma.ticketMessage.upsert({
-        where: { id: mid },
-        update: {},
-        create: {
-          id: mid,
-          ticketId: id,
-          senderId: m.from === 'author' ? authorUser.id : adminIds[m.from],
-          type: m.type,
-          body: m.body,
-          createdAt: hoursAgo(m.hoursAgo),
-        },
-      });
-    }
-  }
+  await prisma.ticketMessage.createMany({
+    skipDuplicates: true,
+    data: TICKETS.flatMap((t) => {
+      // The author's original query is also the first thread message.
+      const thread: SeedMessage[] = [
+        { from: 'author', type: MessageType.AUTHOR_MESSAGE, body: t.description, hoursAgo: t.createdHoursAgo },
+        ...t.messages,
+      ];
+      return thread.map((m, i) => ({
+        id: `seed-msg-${t.number}-${i + 1}`,
+        ticketId: `seed-ticket-${t.number}`,
+        senderId: m.from === 'author' ? authorUserId.get(t.authorId)! : adminIds[m.from],
+        type: m.type,
+        body: m.body,
+        createdAt: hoursAgo(m.hoursAgo),
+      }));
+    }),
+  });
 
   // Seeded rows set ticketNumber explicitly, so move the sequence past them (next ticket = max + 1).
   await prisma.$executeRawUnsafe(
     `SELECT setval(pg_get_serial_sequence('"Ticket"', 'ticketNumber'), GREATEST((SELECT COALESCE(MAX("ticketNumber"), 0) FROM "Ticket"), 1000))`,
   );
-  log(`tickets upserted`);
+  log('tickets and messages inserted');
 
   const [authorCount, bookCount, userCount, ticketCount] = await Promise.all([
     prisma.author.count(),

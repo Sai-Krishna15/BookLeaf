@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { describe, expect, it } from 'vitest';
 import { createApp } from '../src/app';
 import { asyncHandler } from '../src/common/asyncHandler';
+import { signAccessToken } from '../src/common/jwt';
 import { ConflictError, ForbiddenError } from '../src/common/errors';
 import { errorHandler } from '../src/middleware/errorHandler';
 import { notFound } from '../src/middleware/notFound';
@@ -26,12 +27,19 @@ describe('GET /api/v1/health', () => {
 });
 
 describe('standard error shape', () => {
-  it('unknown routes -> 404 NOT_FOUND with requestId', async () => {
-    const res = await request(createApp()).get('/api/v1/nope');
+  it('unknown routes -> 404 NOT_FOUND with requestId (for an authenticated caller)', async () => {
+    const token = signAccessToken({ id: 'u1', role: 'ADMIN', authorId: null });
+    const res = await request(createApp()).get('/api/v1/nope').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe('NOT_FOUND');
     expect(typeof res.body.error.message).toBe('string');
     expect(res.body.error.requestId).toBe(res.headers['x-request-id']);
+  });
+
+  it('unknown routes without a token -> 401 (protected by default, no route probing)', async () => {
+    const res = await request(createApp()).get('/api/v1/nope');
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe('UNAUTHORIZED');
   });
 
   it('malformed JSON -> 400 VALIDATION_ERROR', async () => {
