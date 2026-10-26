@@ -13,6 +13,8 @@ const envSchema = z
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.coerce.number().int().min(1).max(65535).default(4000),
     DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+    // Direct (non-pooled) URL, used only by Prisma migrations (prisma.config.ts).
+    DATABASE_URL_UNPOOLED: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
     JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
     JWT_EXPIRES_IN: z.string().min(1).default('1d'),
     CLIENT_ORIGIN: z.string().url(),

@@ -27,3 +27,6 @@ npm-debug.log*
 # Prisma local
 *.db
 *.db-journal
+
+# Generated Prisma client
+server/src/generated/

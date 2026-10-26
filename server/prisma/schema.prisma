@@ -1,0 +1,185 @@
+// Schema per PROJECT_CONTEXT.md §4.
+// Prisma 7: the connection URL is NOT declared here; it lives in prisma.config.ts (migrations)
+// and in the driver adapter passed to PrismaClient in src/config/prisma.ts (runtime).
+
+generator client {
+  provider = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  AUTHOR
+  ADMIN
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketCategory {
+  ROYALTY_PAYMENTS
+  ISBN_METADATA
+  PRINTING_QUALITY
+  DISTRIBUTION_AVAILABILITY
+  BOOK_STATUS_PRODUCTION
+  GENERAL_INQUIRY
+}
+
+enum Priority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum FieldSource {
+  AI
+  FALLBACK
+  ADMIN
+}
+
+enum AiStatus {
+  PENDING
+  DONE
+  FAILED
+  SKIPPED
+}
+
+enum MessageType {
+  AUTHOR_MESSAGE
+  ADMIN_REPLY
+  INTERNAL_NOTE
+}
+
+model User {
+  id              String          @id @default(cuid())
+  email           String          @unique
+  passwordHash    String
+  name            String
+  role            Role
+  authorId        String?         @unique
+  author          Author?         @relation(fields: [authorId], references: [id])
+  assignedTickets Ticket[]        @relation("Assignee")
+  messages        TicketMessage[]
+  createdAt       DateTime        @default(now())
+}
+
+model Author {
+  id         String   @id // AUTH001...
+  name       String
+  email      String   @unique
+  phone      String
+  city       String
+  joinedDate DateTime
+  books      Book[]
+  tickets    Ticket[]
+  user       User?
+}
+
+model Book {
+  id                    String    @id // BK001...
+  authorId              String
+  title                 String
+  isbn                  String
+  genre                 String
+  publicationDate       DateTime? // null while in production
+  status                String // "Published & Live" | "In Production - Cover Design" ...
+  mrp                   Int?
+  authorRoyaltyPerCopy  Int?
+  totalCopiesSold       Int       @default(0)
+  totalRoyaltyEarned    Int       @default(0)
+  royaltyPaid           Int       @default(0)
+  royaltyPending        Int       @default(0)
+  lastRoyaltyPayoutDate DateTime?
+  printPartner          String?
+  availableOn           String[]
+  author                Author    @relation(fields: [authorId], references: [id])
+  tickets               Ticket[]
+
+  @@index([authorId])
+}
+
+model Ticket {
+  id                String          @id @default(cuid())
+  ticketNumber      Int             @unique @default(autoincrement()) // BL-1001 style display
+  authorId          String
+  bookId            String? // null = General / Account Level
+  subject           String
+  description       String
+  status            TicketStatus    @default(OPEN)
+  category          TicketCategory?
+  categorySource    FieldSource?
+  priority          Priority        @default(MEDIUM)
+  prioritySource    FieldSource?
+  aiStatus          AiStatus        @default(PENDING)
+  aiReasoning       String?
+  aiError           String?
+  needsManualTriage Boolean         @default(false) // true when AI failed
+  assignedToId      String?
+  attachments       Json? // [{name,size,type}] metadata only
+  firstResponseAt   DateTime?
+  resolvedAt        DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  author            Author          @relation(fields: [authorId], references: [id])
+  book              Book?           @relation(fields: [bookId], references: [id])
+  assignee          User?           @relation("Assignee", fields: [assignedToId], references: [id])
+  messages          TicketMessage[]
+  drafts            AiDraft[]
+
+  @@index([status, priority, createdAt])
+  @@index([authorId, createdAt])
+  @@index([category])
+}
+
+model TicketMessage {
+  id         String      @id @default(cuid())
+  ticketId   String
+  senderId   String
+  type       MessageType // INTERNAL_NOTE is NEVER returned to authors
+  body       String
+  aiAssisted Boolean     @default(false) // reply started from an AI draft
+  draftId    String?
+  createdAt  DateTime    @default(now())
+  ticket     Ticket      @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender     User        @relation(fields: [senderId], references: [id])
+
+  @@index([ticketId, createdAt])
+}
+
+model AiDraft {
+  id            String   @id @default(cuid())
+  ticketId      String
+  body          String
+  provider      String
+  model         String
+  promptVersion String
+  inputTokens   Int?
+  outputTokens  Int?
+  createdAt     DateTime @default(now())
+  ticket        Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+}
+
+model AiCallLog {
+  id           String   @id @default(cuid())
+  kind         String // CLASSIFY | DRAFT
+  provider     String
+  model        String
+  ticketId     String?
+  latencyMs    Int
+  inputTokens  Int?
+  outputTokens Int?
+  success      Boolean
+  errorCode    String?
+  createdAt    DateTime @default(now())
+}
