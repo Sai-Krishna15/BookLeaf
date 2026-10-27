@@ -11,6 +11,7 @@ import { globalRateLimiter } from './middleware/rateLimiter';
 import { requestId } from './middleware/requestId';
 import { healthRouter } from './modules/health/health.routes';
 import { authProtectedRouter, authPublicRouter } from './modules/auth/auth.routes';
+import { booksRouter } from './modules/books/books.routes';
 import { authenticate } from './middleware/authenticate';
 
 export function createApp(): Express {
@@ -53,7 +54,8 @@ export function createApp(): Express {
   // To add a route, mount it below. Never mount a new router above this line unless it must be public.
   app.use(API_PREFIX, authenticate);
   app.use(`${API_PREFIX}/auth`, authProtectedRouter); // GET /me
-  // Phase 4+: books, tickets, admin (admin routers also use requireRole('ADMIN')).
+  app.use(`${API_PREFIX}/books`, booksRouter);
+  // Phase 5+: tickets, admin (admin routers also use requireRole('ADMIN')).
 
   app.use(notFound);
   app.use(errorHandler);

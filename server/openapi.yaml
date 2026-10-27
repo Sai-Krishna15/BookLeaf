@@ -1,0 +1,471 @@
+openapi: 3.0.3
+info:
+  title: BookLeaf Author Support & Communication Portal API
+  version: 0.4.0
+  description: |
+    REST API for the BookLeaf author portal and admin portal.
+
+    **Conventions**
+    - All endpoints are under `/api/v1`.
+    - Everything except `GET /health` and `POST /auth/login` requires `Authorization: Bearer <jwt>`.
+    - Every error uses the same shape (`ErrorResponse`) and carries a `requestId` that is also sent
+      in the `x-request-id` response header.
+    - List endpoints are paginated with `?page=1&limit=20` (limit max 100) and return `{ data, meta }`.
+    - Authors only ever see their own data. Another author's resource returns **404**, never 403.
+
+    _This file is extended every phase. Ticket and admin endpoints arrive in Phases 5-6._
+servers:
+  - url: http://localhost:4000/api/v1
+    description: Local development
+tags:
+  - name: Health
+  - name: Auth
+  - name: Books
+
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Service health (public)
+      description: Reports database connectivity and AI provider mode. Always HTTP 200; `status` is `degraded` when the database is unreachable.
+      operationId: getHealth
+      security: []
+      responses:
+        '200':
+          description: Health report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthReport'
+              example:
+                status: ok
+                uptimeSeconds: 42
+                timestamp: '2026-10-26T10:00:00.000Z'
+                checks:
+                  database: connected
+                  ai: { enabled: false, primary: gemini, secondary: null, mode: manual_fallback }
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in with email and password (public)
+      description: |
+        Email is trimmed and lower-cased. An unknown email and a wrong password return the **same**
+        401 response (and take the same time), so accounts cannot be enumerated.
+        Stricter rate limit than the rest of the API (10 attempts / 15 min / IP).
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: priya.sharma@email.com
+              password: Test@1234
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          description: Invalid email or password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: { code: UNAUTHORIZED, message: Invalid email or password, requestId: 4f0c2c0e-9a52-4a38-9d0a-6f6a1d2f0b11 }
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Current user (plus author profile for authors)
+      operationId: getMe
+      responses:
+        '200':
+          description: The authenticated user. `author` is null for admins.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /books:
+    get:
+      tags: [Books]
+      summary: List books (paginated)
+      description: |
+        - **AUTHOR**: always the caller's own books. Any `authorId` parameter is ignored.
+        - **ADMIN**: all books, optionally filtered by `authorId`.
+
+        Default order: published books first (newest publication date first), then in-production books.
+        An AUTHOR token without an author profile gets 403.
+      operationId: listBooks
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/AuthorIdFilter'
+      responses:
+        '200':
+          description: A page of books
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /books/summary:
+    get:
+      tags: [Books]
+      summary: Royalty summary across ALL of an author's books
+      description: |
+        Aggregates the whole portfolio, not just one page of the list.
+        - **AUTHOR**: the caller's own books (`authorId` ignored).
+        - **ADMIN**: `authorId` is **required** (400 otherwise); unknown author is 404.
+
+        `pendingBelowThreshold` is an author-level accumulation: true when
+        `0 < totalPending < payoutThreshold` (INR 1,000).
+      operationId: getBooksSummary
+      parameters:
+        - $ref: '#/components/parameters/AuthorIdFilter'
+      responses:
+        '200':
+          description: Portfolio summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BooksSummary'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /books/{id}:
+    get:
+      tags: [Books]
+      summary: Get one book
+      description: |
+        **AUTHOR** can only read their own books. Another author's book and a nonexistent id both
+        return the same 404. **ADMIN** can read any book.
+      operationId: getBook
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Book id, for example `BK001`.
+          schema: { type: string, pattern: '^[A-Za-z0-9_-]+$', maxLength: 50 }
+          example: BK001
+      responses:
+        '200':
+          description: The book
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Book'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT from `POST /auth/login`. Claims are `sub` (user id), `role` and `authorId`.
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      description: 1-based page number.
+      schema: { type: integer, minimum: 1, default: 1 }
+    Limit:
+      name: limit
+      in: query
+      description: Page size.
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    AuthorIdFilter:
+      name: authorId
+      in: query
+      description: Admin only. Ignored for authors.
+      schema: { type: string, maxLength: 50 }
+      example: AUTH007
+
+  responses:
+    ValidationError:
+      description: Invalid request data (VALIDATION_ERROR)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            error:
+              code: VALIDATION_ERROR
+              message: Invalid request data
+              details: [{ in: query, path: limit, message: 'Too big: expected number to be <=100' }]
+              requestId: 4f0c2c0e-9a52-4a38-9d0a-6f6a1d2f0b11
+    Unauthorized:
+      description: Missing, malformed, expired or invalid token (UNAUTHORIZED)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            error: { code: UNAUTHORIZED, message: Authentication required, requestId: 4f0c2c0e-9a52-4a38-9d0a-6f6a1d2f0b11 }
+    Forbidden:
+      description: Authenticated but not allowed (FORBIDDEN)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            error: { code: FORBIDDEN, message: You do not have permission to perform this action, requestId: 4f0c2c0e-9a52-4a38-9d0a-6f6a1d2f0b11 }
+    NotFound:
+      description: Resource not found, or not visible to the caller (NOT_FOUND)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            error: { code: NOT_FOUND, message: Book not found, requestId: 4f0c2c0e-9a52-4a38-9d0a-6f6a1d2f0b11 }
+    RateLimited:
+      description: Too many requests (RATE_LIMITED)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            error: { code: RATE_LIMITED, message: 'Too many requests, please try again later', requestId: 4f0c2c0e-9a52-4a38-9d0a-6f6a1d2f0b11 }
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId]
+          properties:
+            code:
+              type: string
+              enum: [VALIDATION_ERROR, UNAUTHORIZED, FORBIDDEN, NOT_FOUND, CONFLICT, RATE_LIMITED, AI_UNAVAILABLE, INTERNAL_ERROR]
+            message: { type: string }
+            details:
+              type: array
+              description: Present for validation errors.
+              items:
+                type: object
+                additionalProperties: true
+            requestId:
+              type: string
+              description: Correlation id, also returned in the `x-request-id` header.
+
+    HealthReport:
+      type: object
+      required: [status, uptimeSeconds, timestamp, checks]
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+        uptimeSeconds: { type: integer }
+        timestamp: { type: string, format: date-time }
+        checks:
+          type: object
+          required: [database, ai]
+          properties:
+            database: { type: string, enum: [connected, unreachable] }
+            ai:
+              type: object
+              required: [enabled, primary, secondary, mode]
+              properties:
+                enabled: { type: boolean }
+                primary: { type: string, enum: [gemini] }
+                secondary: { type: string, nullable: true, enum: [groq] }
+                mode: { type: string, enum: [ai, manual_fallback] }
+
+    Role:
+      type: string
+      enum: [AUTHOR, ADMIN]
+
+    User:
+      type: object
+      required: [id, email, name, role, authorId]
+      properties:
+        id: { type: string }
+        email: { type: string, format: email }
+        name: { type: string }
+        role: { $ref: '#/components/schemas/Role' }
+        authorId: { type: string, nullable: true, description: Null for admins. }
+
+    AuthorProfile:
+      type: object
+      required: [id, name, email, phone, city, joinedDate]
+      properties:
+        id: { type: string, example: AUTH001 }
+        name: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }
+        city: { type: string }
+        joinedDate: { type: string, format: date-time }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 1, maxLength: 200 }
+
+    LoginResponse:
+      type: object
+      required: [token, user]
+      properties:
+        token: { type: string, description: Signed JWT (HS256). }
+        user: { $ref: '#/components/schemas/User' }
+
+    MeResponse:
+      type: object
+      required: [user, author]
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        author:
+          allOf:
+            - $ref: '#/components/schemas/AuthorProfile'
+          nullable: true
+
+    PaginationMeta:
+      type: object
+      required: [page, limit, total, totalPages, hasNext, hasPrev]
+      properties:
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+        totalPages: { type: integer, description: 0 when there are no rows. }
+        hasNext: { type: boolean }
+        hasPrev: { type: boolean }
+
+    StageProgress:
+      type: object
+      required: [name, state]
+      properties:
+        name:
+          type: string
+          enum: [Manuscript Received, Editing, Cover Design, Typesetting, Proofreading, ISBN Assignment, Printing, Distribution Setup, Published & Live]
+        state: { type: string, enum: [complete, current, upcoming] }
+
+    ProductionStage:
+      type: object
+      required: [currentStage, currentStageIndex, stages]
+      properties:
+        currentStage:
+          type: string
+          nullable: true
+          description: Null when the stored status is unknown (the raw `status` is still returned on the book).
+        currentStageIndex: { type: integer, nullable: true, minimum: 0, maximum: 8 }
+        stages:
+          type: array
+          minItems: 9
+          maxItems: 9
+          items: { $ref: '#/components/schemas/StageProgress' }
+
+    PayoutWindows:
+      type: object
+      description: |
+        Assumption: calendar quarters; a quarter's royalties are due quarter end + 45 days. Computed
+        relative to the current date, never hardcoded.
+      required: [lastQuarterEnd, lastQuarterPayoutDeadline, nextQuarterEnd, nextQuarterPayoutDeadline]
+      properties:
+        lastQuarterEnd: { type: string, format: date, description: Last day of the most recently completed quarter. }
+        lastQuarterPayoutDeadline: { type: string, format: date }
+        nextQuarterEnd: { type: string, format: date, description: Last day of the current quarter. }
+        nextQuarterPayoutDeadline: { type: string, format: date }
+
+    Book:
+      type: object
+      required:
+        - id
+        - authorId
+        - title
+        - isbn
+        - genre
+        - publicationDate
+        - status
+        - mrp
+        - authorRoyaltyPerCopy
+        - totalCopiesSold
+        - totalRoyaltyEarned
+        - royaltyPaid
+        - royaltyPending
+        - lastRoyaltyPayoutDate
+        - printPartner
+        - availableOn
+        - isPublished
+        - productionStage
+        - neverPaid
+        - belowPayoutThreshold
+        - payoutWindows
+      properties:
+        id: { type: string, example: BK001 }
+        authorId: { type: string, example: AUTH001 }
+        title: { type: string }
+        isbn: { type: string, description: 'Shown exactly as stored, including XXXX placeholders.', example: 978-93-5XXXX-01-1 }
+        genre: { type: string }
+        publicationDate: { type: string, format: date, nullable: true, description: Null while in production. }
+        status: { type: string, example: Published & Live }
+        mrp: { type: integer, nullable: true, description: INR. Null (not 0) while unpublished. }
+        authorRoyaltyPerCopy: { type: integer, nullable: true, description: INR. Null while unpublished. }
+        totalCopiesSold: { type: integer }
+        totalRoyaltyEarned: { type: integer, nullable: true, description: INR. Null while unpublished. }
+        royaltyPaid: { type: integer, nullable: true, description: INR. Null while unpublished. }
+        royaltyPending: { type: integer, nullable: true, description: INR. Null while unpublished. }
+        lastRoyaltyPayoutDate: { type: string, format: date, nullable: true, description: Null when never paid. }
+        printPartner: { type: string, nullable: true }
+        availableOn: { type: array, items: { type: string } }
+        isPublished: { type: boolean }
+        productionStage: { $ref: '#/components/schemas/ProductionStage' }
+        neverPaid: { type: boolean, description: Published and royaltyPaid is 0. }
+        belowPayoutThreshold: { type: boolean, description: 'Published and 0 < pending < 1000 (rolls over to the next quarter).' }
+        payoutWindows: { $ref: '#/components/schemas/PayoutWindows' }
+
+    BookListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Book' }
+        meta: { $ref: '#/components/schemas/PaginationMeta' }
+
+    BooksSummary:
+      type: object
+      required: [totalEarned, totalPaid, totalPending, bookCount, publishedCount, inProductionCount, payoutThreshold, pendingBelowThreshold]
+      properties:
+        totalEarned: { type: integer, description: 'INR, across all books.' }
+        totalPaid: { type: integer }
+        totalPending: { type: integer }
+        bookCount: { type: integer }
+        publishedCount: { type: integer }
+        inProductionCount: { type: integer }
+        payoutThreshold: { type: integer, example: 1000 }
+        pendingBelowThreshold: { type: boolean, description: 'Author-level: 0 < totalPending < payoutThreshold.' }
