@@ -143,22 +143,16 @@ async function findUrgencyPage(
   skip: number,
   take: number,
 ): Promise<{ ids: string[]; total: number }> {
-  // Build the Prisma WHERE into a raw fragment. We use Prisma's count for correctness
-  // and $queryRaw only for the ordered ids.
-  const total = await prisma.ticket.count({ where });
-  if (total === 0) return { ids: [], total: 0 };
-
   // Convert the Prisma WHERE into something we can use with $queryRaw.
-  // Strategy: materialize all matching ids with Prisma first (single query returning only id),
-  // then apply the CASE sort in SQL on that subset.
-  // For large datasets a real implementation would push the filter into the raw SQL; for this
-  // project's scale (hundreds of tickets) the id-list approach is fine and keeps type safety.
+  // Materialize all matching ids with Prisma first (single query returning only id),
+  // then apply the CASE sort in SQL on that subset. matchingIds.length is the total count.
   const matchingIds = await prisma.ticket.findMany({
     where,
     select: { id: true },
   });
 
-  if (matchingIds.length === 0) return { ids: [], total: 0 };
+  const total = matchingIds.length;
+  if (total === 0) return { ids: [], total: 0 };
 
   const idList = matchingIds.map((r) => r.id);
 

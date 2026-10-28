@@ -79,12 +79,16 @@ describe('seed', () => {
   }, 30_000);
 
   it('seeds varied demo tickets incl. internal note and an AI-failed ticket', async () => {
-    // Reset seed-ticket-1006 (Priya's resolved ticket) in case a previous test
-    // run reopened it via the follow-up message test. The seed is idempotent for
-    // inserts but does not re-apply status changes made through the app.
+    // Reset seed-ticket-1006 (Priya's resolved ticket) and seed-ticket-1009 (AI-failed ticket)
+    // in case a previous test run modified them. The seed is idempotent for
+    // inserts but does not re-apply status/categorySource changes made through the app.
     await prisma.ticket.update({
       where: { id: 'seed-ticket-1006' },
       data: { status: 'RESOLVED', resolvedAt: new Date(Date.now() - 100 * 3_600_000) },
+    });
+    await prisma.ticket.update({
+      where: { id: 'seed-ticket-1009' },
+      data: { categorySource: 'FALLBACK', prioritySource: 'FALLBACK', needsManualTriage: true },
     });
 
     const tickets = await prisma.ticket.findMany({ where: { id: { startsWith: 'seed-ticket-' } } });

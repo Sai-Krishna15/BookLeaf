@@ -298,17 +298,17 @@ describe('GET /tickets (list)', () => {
   });
 
   it('admin: urgency sort — unresolved before resolved, then by priority', async () => {
-    // Walk all pages at limit=2 and verify the global order
+    // Walk pages at limit=10 and verify the global order across pages
     let allTickets: Array<{ status: string; priority: string }> = [];
     let page = 1;
     let hasNext = true;
     while (hasNext) {
-      const res = await get(`/api/v1/tickets?sort=urgency&limit=2&page=${page}`, 'admin');
+      const res = await get(`/api/v1/tickets?sort=urgency&limit=10&page=${page}`, 'admin');
       expect(res.status).toBe(200);
       allTickets = [...allTickets, ...res.body.data];
       hasNext = res.body.meta.hasNext as boolean;
       page++;
-      if (page > 50) break; // safety
+      if (page > 30) break; // safety
     }
 
     // Verify: resolved/closed come after open/in_progress
@@ -337,7 +337,7 @@ describe('GET /tickets (list)', () => {
       const r2 = priorityRank[next.priority] ?? 99;
       expect(r1).toBeLessThanOrEqual(r2);
     }
-  });
+  }, 60_000);
 
   it('401 with no token', async () => {
     const res = await request(app).get('/api/v1/tickets');

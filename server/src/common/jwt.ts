@@ -11,6 +11,11 @@ export interface AuthUser {
   authorId: string | null;
 }
 
+export interface VerifiedToken {
+  user: AuthUser;
+  exp?: number;
+}
+
 const ALGORITHM = 'HS256' as const;
 
 /** Claims are deliberately minimal: sub (user id), role, authorId. No PII. */
@@ -20,14 +25,14 @@ const claimsSchema = z.object({
   authorId: z.string().min(1).nullish(),
 });
 
-export function signAccessToken(user: AuthUser): string {
+export function signAccessToken(user: AuthUser, expiresIn?: SignOptions['expiresIn']): string {
   return jwt.sign(
     { role: user.role, ...(user.authorId ? { authorId: user.authorId } : {}) },
     env.JWT_SECRET,
     {
       subject: user.id,
       algorithm: ALGORITHM,
-      expiresIn: env.JWT_EXPIRES_IN as SignOptions['expiresIn'],
+      expiresIn: expiresIn ?? (env.JWT_EXPIRES_IN as SignOptions['expiresIn']),
     },
   );
 }
@@ -38,6 +43,13 @@ export function signAccessToken(user: AuthUser): string {
  * throws UnauthorizedError for missing, malformed, tampered or expired tokens.
  */
 export function verifyAccessToken(token: string): AuthUser {
+  return verifyAccessTokenWithExpiry(token).user;
+}
+
+/**
+ * Verifies token and returns both AuthUser and the exp claim (seconds since epoch) for Socket.IO expiry scheduling.
+ */
+export function verifyAccessTokenWithExpiry(token: string): VerifiedToken {
   let payload: unknown;
   try {
     payload = jwt.verify(token, env.JWT_SECRET, { algorithms: [ALGORITHM] });
@@ -47,5 +59,11 @@ export function verifyAccessToken(token: string): AuthUser {
   }
   const parsed = claimsSchema.safeParse(payload);
   if (!parsed.success) throw new UnauthorizedError('Invalid token');
-  return { id: parsed.data.sub, role: parsed.data.role, authorId: parsed.data.authorId ?? null };
+
+  const exp = typeof (payload as { exp?: unknown })?.exp === 'number' ? (payload as { exp: number }).exp : undefined;
+
+  return {
+    user: { id: parsed.data.sub, role: parsed.data.role, authorId: parsed.data.authorId ?? null },
+    exp,
+  };
 }
