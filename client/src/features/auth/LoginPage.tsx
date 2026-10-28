@@ -77,7 +77,9 @@ export function LoginPage() {
     if (isAuthenticated && user) {
       const defaultPath = user.role === 'ADMIN' ? '/admin/tickets' : '/books';
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const target = (location.state as any)?.from?.pathname || defaultPath;
+      const fromPath = (location.state as any)?.from?.pathname;
+      const isPrivateTicketDetail = fromPath && /^\/tickets\/[^\/]+$/.test(fromPath) && fromPath !== '/tickets/new';
+      const target = fromPath && !isPrivateTicketDetail ? fromPath : defaultPath;
       navigate(target, { replace: true });
     }
   }, [isAuthenticated, user, navigate, location]);
@@ -97,7 +99,10 @@ export function LoginPage() {
       }
 
       setAuth(res.token, res.user, authorProfile);
-      const target = res.user.role === 'ADMIN' ? '/admin/tickets' : '/books';
+      const fromPath = (location.state as any)?.from?.pathname;
+      const isPrivateTicketDetail = fromPath && /^\/tickets\/[^\/]+$/.test(fromPath) && fromPath !== '/tickets/new';
+      const defaultPath = res.user.role === 'ADMIN' ? '/admin/tickets' : '/books';
+      const target = fromPath && !isPrivateTicketDetail ? fromPath : defaultPath;
       navigate(target, { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {

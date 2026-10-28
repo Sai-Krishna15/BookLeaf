@@ -34,7 +34,7 @@ export function AuthorLayout() {
 
   const handleLogout = () => {
     logout();
-    navigate('/login', { replace: true });
+    navigate('/login', { replace: true, state: null });
   };
 
   const getInitials = (name?: string) => {
