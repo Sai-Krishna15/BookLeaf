@@ -7,6 +7,7 @@ import {
   noteBodySchema,
   replyBodySchema,
   adminTicketIdParamSchema,
+  aiUsageQuerySchema,
 } from './admin.schema';
 
 const router = Router();
@@ -38,8 +39,21 @@ router.post(
   adminController.adminReply,
 );
 
+router.post(
+  '/tickets/:id/reclassify',
+  validate({ params: adminTicketIdParamSchema }),
+  adminController.reclassify,
+);
+
 router.get('/admins', adminController.listAdmins);
 
 router.get('/stats', adminController.getStats);
 
+router.get(
+  '/ai/usage',
+  validate({ query: aiUsageQuerySchema }),
+  adminController.getAiUsage,
+);
+
 export { router as adminRouter };
+

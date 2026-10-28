@@ -4,6 +4,7 @@ import { env } from './config/env';
 import { logger } from './config/logger';
 import { initSocketServer, closeSocketServer } from './realtime/socket';
 import { initRealtimeGateway } from './realtime/gateway';
+import { aiService, registerAiDomainListeners } from './modules/ai/ai.service';
 
 const app = createApp();
 // Plain http.Server so Socket.IO can attach to it.
@@ -12,6 +13,11 @@ const server = http.createServer(app);
 // Initialize Socket.IO and Gateway (PROJECT_CONTEXT §9)
 const io = initSocketServer(server);
 initRealtimeGateway(io);
+
+// Initialize AI background processing & recovery (PROJECT_CONTEXT §8)
+registerAiDomainListeners();
+void aiService.recoverPendingTickets();
+
 
 server.listen(env.PORT, () => {
   logger.info({ port: env.PORT }, `BookLeaf server listening on :${env.PORT}`);

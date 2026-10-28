@@ -559,6 +559,60 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /admin/tickets/{id}/reclassify:
+    post:
+      tags: [Admin]
+      summary: Re-run AI ticket classification
+      description: |
+        ADMIN only. Asynchronously triggers AI classification pipeline.
+        Returns 202 Accepted with current ticket state. 409 if a classification is already in progress.
+      operationId: reclassifyTicket
+      parameters:
+        - $ref: '#/components/parameters/TicketId'
+      responses:
+        '202':
+          description: Reclassification accepted and queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTicket'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Classification already in progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/ai/usage:
+    get:
+      tags: [Admin]
+      summary: Get AI usage and performance metrics
+      description: |
+        ADMIN only. Aggregates call totals, token usage, latency, and success rates from AiCallLog.
+      operationId: getAiUsage
+      parameters:
+        - name: days
+          in: query
+          description: Window in days to aggregate metrics (default 7).
+          schema: { type: integer, minimum: 1, maximum: 365, default: 7 }
+      responses:
+        '200':
+          description: AI metrics report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiUsageReport'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -669,12 +723,22 @@ components:
             database: { type: string, enum: [connected, unreachable] }
             ai:
               type: object
-              required: [enabled, primary, secondary, mode]
+              required: [enabled, primary, secondary, mode, configuredProviders, circuitBreaker]
               properties:
                 enabled: { type: boolean }
                 primary: { type: string, enum: [gemini] }
                 secondary: { type: string, nullable: true, enum: [groq] }
                 mode: { type: string, enum: [ai, manual_fallback] }
+                configuredProviders:
+                  type: array
+                  items: { type: string }
+                circuitBreaker:
+                  type: object
+                  required: [state, consecutiveFailures]
+                  properties:
+                    state: { type: string, enum: [CLOSED, OPEN] }
+                    consecutiveFailures: { type: integer }
+                    resetAt: { type: string, format: date-time, nullable: true }
 
     Role:
       type: string
@@ -1109,3 +1173,36 @@ components:
         avgFirstResponseHours:
           type: number
           nullable: true
+
+    AiUsageReport:
+      type: object
+      required: [windowDays, from, to, totals, byKindAndProvider]
+      properties:
+        windowDays: { type: integer }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        totals:
+          type: object
+          required: [calls, failures, successRate, inputTokens, outputTokens, averageLatencyMs]
+          properties:
+            calls: { type: integer }
+            failures: { type: integer }
+            successRate: { type: number }
+            inputTokens: { type: integer }
+            outputTokens: { type: integer }
+            averageLatencyMs: { type: integer }
+        byKindAndProvider:
+          type: array
+          items:
+            type: object
+            required: [kind, provider, calls, failures, successRate, inputTokens, outputTokens, averageLatencyMs]
+            properties:
+              kind: { type: string }
+              provider: { type: string }
+              calls: { type: integer }
+              failures: { type: integer }
+              successRate: { type: number }
+              inputTokens: { type: integer }
+              outputTokens: { type: integer }
+              averageLatencyMs: { type: integer }
+

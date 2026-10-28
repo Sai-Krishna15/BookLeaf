@@ -66,3 +66,14 @@ export const adminTicketIdParamSchema = z.object({
 });
 
 export type AdminTicketIdParam = z.infer<typeof adminTicketIdParamSchema>;
+
+// ---------------------------------------------------------------------------
+// GET /admin/ai/usage
+// ---------------------------------------------------------------------------
+
+export const aiUsageQuerySchema = z.object({
+  days: z.coerce.number().int().min(1).max(365).default(7),
+});
+
+export type AiUsageQuery = z.infer<typeof aiUsageQuerySchema>;
+

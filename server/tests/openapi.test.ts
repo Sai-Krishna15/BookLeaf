@@ -25,6 +25,8 @@ const IMPLEMENTED: Array<[string, string]> = [
   ['/admin/tickets/{id}/reply', 'post'],
   ['/admin/admins', 'get'],
   ['/admin/stats', 'get'],
+  ['/admin/tickets/{id}/reclassify', 'post'],
+  ['/admin/ai/usage', 'get'],
 ];
 
 describe('openapi.yaml', () => {

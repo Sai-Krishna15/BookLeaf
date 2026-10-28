@@ -13,6 +13,7 @@
 
 import { ValidationError, ConflictError, NotFoundError } from '../../common/errors';
 import { domainEvents } from '../../common/domainEvents';
+import { aiService } from '../ai/ai.service';
 import {
   toAdminTicketDto,
   toMessageDto,
@@ -216,5 +217,14 @@ export const adminService = {
 
   getStats(): Promise<AdminStats> {
     return adminRepository.getStats();
+  },
+
+  // ---- POST /admin/tickets/:id/reclassify ---------------------------------
+
+  async reclassifyTicket(ticketId: string): Promise<AdminTicketDto> {
+    const ticket = await adminRepository.findById(ticketId);
+    if (!ticket) throw new NotFoundError('Ticket not found');
+    await aiService.reclassifyTicket(ticketId);
+    return toAdminTicketDto(ticket, new Date());
   },
 };
