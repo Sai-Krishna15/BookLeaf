@@ -19,7 +19,7 @@ export const CATEGORY_LABELS: Record<TicketCategory, string> = {
   PRINTING_QUALITY: 'Printing & Quality',
   DISTRIBUTION_AVAILABILITY: 'Distribution & Availability',
   BOOK_STATUS_PRODUCTION: 'Book Status & Production Updates',
-  GENERAL_INQUIRY: 'General Inquiry',
+  GENERAL_INQUIRY: 'General / Account Level',
 };
 
 export function CategoryBadge({ category, className, ...props }: CategoryBadgeProps) {

@@ -172,7 +172,7 @@ export function FilterBar({
               <SelectItem value="PRINTING_QUALITY">Printing & Quality</SelectItem>
               <SelectItem value="DISTRIBUTION_AVAILABILITY">Distribution & Availability</SelectItem>
               <SelectItem value="BOOK_STATUS_PRODUCTION">Book Status / Production</SelectItem>
-              <SelectItem value="GENERAL_INQUIRY">General Inquiry</SelectItem>
+              <SelectItem value="GENERAL_INQUIRY">General / Account Level</SelectItem>
             </SelectContent>
           </Select>
         </div>

@@ -11,6 +11,7 @@ import type {
   PatchTicketRequest,
 } from './types';
 import type { TicketListResponse, TicketMessage } from '@/features/tickets/types';
+import type { BooksSummary } from '@/features/books/types';
 
 export const adminKeys = {
   all: ['admin'] as const,
@@ -19,7 +20,9 @@ export const adminKeys = {
   tickets: () => [...adminKeys.all, 'tickets'] as const,
   ticketList: (params?: Record<string, unknown>) => [...adminKeys.tickets(), 'list', params] as const,
   ticketDetail: (id: string) => [...adminKeys.tickets(), 'detail', id] as const,
+  ticketMessages: (id: string) => [...adminKeys.tickets(), 'messages', id] as const,
   draft: (id: string) => [...adminKeys.tickets(), 'draft', id] as const,
+  authorSummary: (authorId: string) => ['books', 'summary', authorId] as const,
 };
 
 export const adminApi = {
@@ -34,6 +37,11 @@ export const adminApi = {
 
   async getTicket(id: string): Promise<AdminTicket> {
     const res = await api.get<AdminTicket>(`/tickets/${id}`);
+    return res.data;
+  },
+
+  async getTicketMessages(id: string): Promise<TicketMessage[]> {
+    const res = await api.get<TicketMessage[]>(`/tickets/${id}/messages`);
     return res.data;
   },
 
@@ -57,6 +65,11 @@ export const adminApi = {
     return res.data;
   },
 
+  async reclassify(id: string): Promise<AdminTicket> {
+    const res = await api.post<AdminTicket>(`/admin/tickets/${id}/reclassify`);
+    return res.data;
+  },
+
   async addNote(id: string, payload: CreateNoteRequest): Promise<TicketMessage> {
     const res = await api.post<TicketMessage>(`/admin/tickets/${id}/notes`, payload);
     return res.data;
@@ -74,6 +87,11 @@ export const adminApi = {
 
   async regenerateDraft(id: string): Promise<DraftResponse> {
     const res = await api.post<DraftResponse>(`/admin/tickets/${id}/draft/regenerate`);
+    return res.data;
+  },
+
+  async getAuthorSummary(authorId: string): Promise<BooksSummary> {
+    const res = await api.get<BooksSummary>('/books/summary', { params: { authorId } });
     return res.data;
   },
 };

@@ -59,6 +59,8 @@ export function usePatchTicket() {
                 category: payload.category ?? t.category,
                 priority: payload.priority ?? t.priority,
                 assignedToId: payload.assignedToId !== undefined ? payload.assignedToId : t.assignedToId,
+                needsManualTriage:
+                  payload.category || payload.priority ? false : t.needsManualTriage,
                 categorySource: payload.category ? 'ADMIN' : t.categorySource,
                 prioritySource: payload.priority ? 'ADMIN' : t.prioritySource,
                 resolvedAt:
@@ -82,6 +84,8 @@ export function usePatchTicket() {
           priority: payload.priority ?? previousDetail.priority,
           assignedToId:
             payload.assignedToId !== undefined ? payload.assignedToId : previousDetail.assignedToId,
+          needsManualTriage:
+            payload.category || payload.priority ? false : previousDetail.needsManualTriage,
           categorySource: payload.category ? 'ADMIN' : previousDetail.categorySource,
           prioritySource: payload.priority ? 'ADMIN' : previousDetail.prioritySource,
           resolvedAt:

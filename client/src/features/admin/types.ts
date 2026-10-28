@@ -132,20 +132,24 @@ export interface AdminReplyResponse {
 export interface CannedSnippet {
   id: string;
   title: string;
-  body: string;
+  template: string;
 }
 
 export interface DraftDetail {
   id: string;
+  ticketId: string;
   body: string;
-  model: string;
-  confidence: number;
+  warnings: string[];
   createdAt: string;
+  provider: string;
+  model: string;
+  stale: boolean;
 }
 
 export interface DraftResponse {
-  status: 'ready' | 'generating' | 'unavailable';
+  status: 'ready' | 'unavailable';
   draft: DraftDetail | null;
-  cannedSnippets?: CannedSnippet[];
+  snippets?: CannedSnippet[];
   reason?: string;
+  categoryProvisional?: boolean;
 }
