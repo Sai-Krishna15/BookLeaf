@@ -9,6 +9,7 @@ interface ActiveFilterChipsProps {
   priority?: string;
   assignedTo?: string;
   needsManualTriage?: string | boolean;
+  overdue?: string | boolean;
   from?: string;
   to?: string;
   q?: string;
@@ -25,6 +26,7 @@ export function ActiveFilterChips({
   priority,
   assignedTo,
   needsManualTriage,
+  overdue,
   from,
   to,
   q,
@@ -67,6 +69,10 @@ export function ActiveFilterChips({
 
   if (needsManualTriage === 'true' || needsManualTriage === true) {
     chips.push({ key: 'needsManualTriage', label: 'Needs Triage' });
+  }
+
+  if (overdue === 'true' || overdue === true) {
+    chips.push({ key: 'overdue', label: 'Overdue' });
   }
 
   if (from || to) {

@@ -96,6 +96,7 @@ export interface AdminQueueFilters {
   priority?: Priority;
   assignedTo?: string; // 'me' | 'unassigned' | <userId>
   needsManualTriage?: boolean | 'true' | 'false';
+  overdue?: boolean | 'true' | 'false';
   from?: string; // YYYY-MM-DD
   to?: string; // YYYY-MM-DD
   q?: string;

@@ -22,6 +22,7 @@
 
 import { Prisma } from '../../generated/prisma/client';
 import { prisma } from '../../config/prisma';
+import { SLA_HOURS } from '../../common/sla';
 import type { AdminListQuery, AuthorListQuery } from './tickets.schema';
 
 // ---------------------------------------------------------------------------
@@ -88,6 +89,50 @@ function buildAdminWhere(q: AdminListQuery, resolvedAssigneeId?: string): Ticket
   if (q.authorId) where.authorId = q.authorId;
   if (q.bookId) where.bookId = q.bookId;
   if (q.needsManualTriage !== undefined) where.needsManualTriage = q.needsManualTriage;
+
+  // overdue: unresolved (OPEN, IN_PROGRESS), no firstResponseAt, past priority SLA limit
+  if (q.overdue !== undefined) {
+    const now = new Date();
+    const criticalCutoff = new Date(now.getTime() - SLA_HOURS.CRITICAL * 3600 * 1000);
+    const highCutoff = new Date(now.getTime() - SLA_HOURS.HIGH * 3600 * 1000);
+    const mediumCutoff = new Date(now.getTime() - SLA_HOURS.MEDIUM * 3600 * 1000);
+    const lowCutoff = new Date(now.getTime() - SLA_HOURS.LOW * 3600 * 1000);
+
+    const overduePriorityClauses: TicketWhereInput[] = [
+      { priority: 'CRITICAL', createdAt: { lt: criticalCutoff } },
+      { priority: 'HIGH', createdAt: { lt: highCutoff } },
+      { priority: 'MEDIUM', createdAt: { lt: mediumCutoff } },
+      { priority: 'LOW', createdAt: { lt: lowCutoff } },
+    ];
+
+    if (q.overdue === true) {
+      if (where.status) {
+        if (where.status !== 'OPEN' && where.status !== 'IN_PROGRESS') {
+          where.id = '__none__';
+        }
+      } else {
+        where.status = { in: ['OPEN', 'IN_PROGRESS'] };
+      }
+      where.firstResponseAt = null;
+
+      if (where.OR) {
+        where.AND = [
+          ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+          { OR: where.OR },
+          { OR: overduePriorityClauses },
+        ];
+        delete where.OR;
+      } else {
+        where.OR = overduePriorityClauses;
+      }
+    } else {
+      where.NOT = {
+        status: { in: ['OPEN', 'IN_PROGRESS'] },
+        firstResponseAt: null,
+        OR: overduePriorityClauses,
+      };
+    }
+  }
 
   // assignedTo: me | unassigned | <userId>
   if (q.assignedTo === 'unassigned') {

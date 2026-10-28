@@ -696,4 +696,122 @@ describe('GET /api/v1/admin/stats', () => {
       expect(typeof stats.avgFirstResponseHours).toBe('number');
     }
   });
+
+  it('GET /api/v1/tickets?overdue=true matches /admin/stats overdue count on seeded data', async () => {
+    const statsRes = await get('/api/v1/admin/stats', 'admin');
+    expect(statsRes.status).toBe(200);
+    const expectedOverdueCount = statsRes.body.overdue;
+
+    const listRes = await get('/api/v1/tickets?overdue=true&limit=100', 'admin');
+    expect(listRes.status).toBe(200);
+    expect(listRes.body.meta.total).toBe(expectedOverdueCount);
+    expect(listRes.body.data.length).toBe(expectedOverdueCount);
+
+    // Every item in the list must satisfy overdue criteria
+    for (const ticket of listRes.body.data) {
+      expect(ticket.isOverdue).toBe(true);
+      expect(ticket.firstResponseAt).toBeNull();
+      expect(['OPEN', 'IN_PROGRESS']).toContain(ticket.status);
+    }
+  });
+
+  it('GET /api/v1/tickets?overdue=true accurately matches fixed-time edge cases', async () => {
+    const now = new Date();
+    // 25h ago (CRITICAL SLA is 24h -> overdue)
+    const t25hAgo = new Date(now.getTime() - 25 * 3600 * 1000);
+    // 23h ago (CRITICAL SLA is 24h -> not overdue)
+    const t23hAgo = new Date(now.getTime() - 23 * 3600 * 1000);
+
+    const createdIds: string[] = [];
+
+    // Overdue ticket
+    const overdueTicket = await prisma.ticket.create({
+      data: {
+        ticketNumber: 9991,
+        authorId: 'AUTH003',
+        subject: 'Overdue Edge Case Ticket 1',
+        description: 'Testing overdue edge case with 25h old critical ticket',
+        status: 'OPEN',
+        priority: 'CRITICAL',
+        category: 'GENERAL_INQUIRY',
+        createdAt: t25hAgo,
+        firstResponseAt: null,
+      },
+    });
+    createdIds.push(overdueTicket.id);
+
+    // Not overdue (under SLA)
+    const underSlaTicket = await prisma.ticket.create({
+      data: {
+        ticketNumber: 9992,
+        authorId: 'AUTH003',
+        subject: 'Under SLA Edge Case Ticket 2',
+        description: 'Testing under SLA edge case with 23h old critical ticket',
+        status: 'OPEN',
+        priority: 'CRITICAL',
+        category: 'GENERAL_INQUIRY',
+        createdAt: t23hAgo,
+        firstResponseAt: null,
+      },
+    });
+    createdIds.push(underSlaTicket.id);
+
+    // Not overdue (firstResponseAt present)
+    const repliedTicket = await prisma.ticket.create({
+      data: {
+        ticketNumber: 9993,
+        authorId: 'AUTH003',
+        subject: 'Replied Edge Case Ticket 3',
+        description: 'Testing replied edge case with firstResponseAt set',
+        status: 'OPEN',
+        priority: 'CRITICAL',
+        category: 'GENERAL_INQUIRY',
+        createdAt: t25hAgo,
+        firstResponseAt: new Date(now.getTime() - 24 * 3600 * 1000),
+      },
+    });
+    createdIds.push(repliedTicket.id);
+
+    // Not overdue (resolved)
+    const resolvedTicket = await prisma.ticket.create({
+      data: {
+        ticketNumber: 9994,
+        authorId: 'AUTH003',
+        subject: 'Resolved Edge Case Ticket 4',
+        description: 'Testing resolved edge case',
+        status: 'RESOLVED',
+        priority: 'CRITICAL',
+        category: 'GENERAL_INQUIRY',
+        createdAt: t25hAgo,
+        firstResponseAt: null,
+        resolvedAt: now,
+      },
+    });
+    createdIds.push(resolvedTicket.id);
+
+    try {
+      const statsRes = await get('/api/v1/admin/stats', 'admin');
+      const overdueListRes = await get('/api/v1/tickets?overdue=true&limit=100', 'admin');
+
+      expect(overdueListRes.status).toBe(200);
+      expect(overdueListRes.body.meta.total).toBe(statsRes.body.overdue);
+
+      const returnedIds = overdueListRes.body.data.map((t: { id: string }) => t.id);
+      expect(returnedIds).toContain(overdueTicket.id);
+      expect(returnedIds).not.toContain(underSlaTicket.id);
+      expect(returnedIds).not.toContain(repliedTicket.id);
+      expect(returnedIds).not.toContain(resolvedTicket.id);
+    } finally {
+      await prisma.ticket.deleteMany({
+        where: { id: { in: createdIds } },
+      });
+    }
+  });
+
+  it('author calling GET /api/v1/tickets?overdue=true ignores overdue filter', async () => {
+    const res = await get('/api/v1/tickets?overdue=true', 'ananya');
+    expect(res.status).toBe(200);
+    // Authors only see their own tickets, overdue filter is ignored
+    expect(Array.isArray(res.body.data)).toBe(true);
+  });
 });

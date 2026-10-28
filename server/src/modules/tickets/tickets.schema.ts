@@ -86,6 +86,10 @@ export const adminListQuerySchema = paginationQuerySchema
       .enum(['true', 'false'])
       .transform((v) => v === 'true')
       .optional(),
+    overdue: z
+      .enum(['true', 'false'])
+      .transform((v) => v === 'true')
+      .optional(),
     from: isoDateString.optional(),
     to: isoDateString.optional(),
     q: z.string().max(200).optional(),

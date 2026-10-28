@@ -238,7 +238,7 @@ paths:
       description: |
         - **AUTHOR**: own tickets only. Filters: `status`, `q`, `sort=newest|oldest`.
         - **ADMIN**: all tickets. Extra filters: `category`, `priority`, `authorId`, `bookId`,
-          `assignedTo` (`me|unassigned|<userId>`), `needsManualTriage`, `from`, `to`, `q`,
+          `assignedTo` (`me|unassigned|<userId>`), `needsManualTriage`, `overdue`, `from`, `to`, `q`,
           `sort=urgency` (default) `|newest|oldest`.
 
         **Urgency sort** (DB-level): unresolved (OPEN/IN_PROGRESS) before resolved (RESOLVED/CLOSED),
@@ -274,6 +274,10 @@ paths:
         - name: needsManualTriage
           in: query
           description: Admin only.
+          schema: { type: boolean }
+        - name: overdue
+          in: query
+          description: 'Admin only. When true, returns unresolved tickets with no first response past their priority SLA limit.'
           schema: { type: boolean }
         - name: from
           in: query

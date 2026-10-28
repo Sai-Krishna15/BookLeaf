@@ -166,6 +166,47 @@ describe('AdminTicketsPage', () => {
         expect.objectContaining({ assignedTo: 'unassigned' }),
       );
     });
+
+    // Click "Overdue" stat card
+    const overdueCard = screen.getByText('Overdue');
+    await user.click(overdueCard);
+
+    await waitFor(() => {
+      expect(getTicketsSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ overdue: 'true' }),
+      );
+      expect(screen.getByText('Overdue', { selector: 'span' })).toBeInTheDocument();
+    });
+
+    // Click "Needs Triage" stat card
+    const triageCard = screen.getByText('Needs Triage');
+    await user.click(triageCard);
+
+    await waitFor(() => {
+      expect(getTicketsSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ needsManualTriage: 'true' }),
+      );
+    });
+
+    // Click "Open" stat card
+    const openCard = screen.getAllByText('Open')[0]!;
+    await user.click(openCard);
+
+    await waitFor(() => {
+      expect(getTicketsSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'OPEN' }),
+      );
+    });
+
+    // Click "In Progress" stat card
+    const inProgressCard = screen.getAllByText('In Progress')[0]!;
+    await user.click(inProgressCard);
+
+    await waitFor(() => {
+      expect(getTicketsSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'IN_PROGRESS' }),
+      );
+    });
   });
 
   it('renders queue columns, priority stripe, source markers, and overdue/triage indicators', async () => {

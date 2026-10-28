@@ -38,6 +38,7 @@ export function AdminTicketsPage() {
   const priorityParam = searchParams.get('priority') || undefined;
   const assignedToParam = searchParams.get('assignedTo') || undefined;
   const needsTriageParam = searchParams.get('needsManualTriage') || undefined;
+  const overdueParam = searchParams.get('overdue') || undefined;
   const fromParam = searchParams.get('from') || undefined;
   const toParam = searchParams.get('to') || undefined;
   const qParam = searchParams.get('q') || undefined;
@@ -55,6 +56,12 @@ export function AdminTicketsPage() {
       needsTriageParam === 'true'
         ? 'true'
         : needsTriageParam === 'false'
+          ? 'false'
+          : undefined,
+    overdue:
+      overdueParam === 'true'
+        ? 'true'
+        : overdueParam === 'false'
           ? 'false'
           : undefined,
     from: fromParam,
@@ -91,6 +98,7 @@ export function AdminTicketsPage() {
       priorityParam ||
       assignedToParam ||
       needsTriageParam ||
+      overdueParam ||
       fromParam ||
       toParam ||
       qParam ||
@@ -227,8 +235,8 @@ export function AdminTicketsPage() {
               sublabel="SLA breach risk"
               icon={ClockAlert}
               variant={(stats?.overdue ?? 0) > 0 ? 'danger' : 'default'}
-              isActive={statusParam === 'OPEN' && sortParam === 'urgency'}
-              onClick={() => handleStatCardClick('status', 'OPEN')}
+              isActive={overdueParam === 'true'}
+              onClick={() => handleStatCardClick('overdue', 'true')}
             />
             <StatCard
               label="Needs Triage"
@@ -275,6 +283,7 @@ export function AdminTicketsPage() {
           priority={priorityParam}
           assignedTo={assignedToParam}
           needsManualTriage={needsTriageParam}
+          overdue={overdueParam}
           from={fromParam}
           to={toParam}
           q={qParam}
