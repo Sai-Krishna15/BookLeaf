@@ -36,13 +36,13 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 const DEMO_ACCOUNTS = [
   {
     label: 'Priya (Author)',
-    email: 'priya.sharma@example.com',
+    email: 'priya.sharma@email.com',
     password: 'Test@1234',
     badge: 'Author',
   },
   {
     label: 'Ananya (Author)',
-    email: 'ananya.deshmukh@example.com',
+    email: 'ananya.reddy@email.com',
     password: 'Test@1234',
     badge: 'Author',
   },
