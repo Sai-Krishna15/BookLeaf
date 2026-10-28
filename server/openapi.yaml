@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: BookLeaf Author Support & Communication Portal API
-  version: 0.4.0
+  version: 0.5.0
   description: |
     REST API for the BookLeaf author portal and admin portal.
 
@@ -12,8 +12,9 @@ info:
       in the `x-request-id` response header.
     - List endpoints are paginated with `?page=1&limit=20` (limit max 100) and return `{ data, meta }`.
     - Authors only ever see their own data. Another author's resource returns **404**, never 403.
+    - Domain events are emitted in-process after every DB write (Phase 7 wires them to Socket.IO).
 
-    _This file is extended every phase. Ticket and admin endpoints arrive in Phases 5-6._
+    _Admin endpoints arrive in Phase 6._
 servers:
   - url: http://localhost:4000/api/v1
     description: Local development
@@ -21,6 +22,7 @@ tags:
   - name: Health
   - name: Auth
   - name: Books
+  - name: Tickets
 
 security:
   - bearerAuth: []
@@ -194,6 +196,200 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /tickets:
+    post:
+      tags: [Tickets]
+      summary: Create a support ticket (AUTHOR only)
+      description: |
+        Returns **201** immediately; AI classification runs asynchronously afterward.
+        An AUTHOR token without an author profile gets 403.
+        Admins get 403. Per-user rate limit: 10 tickets per 10 minutes.
+      operationId: createTicket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTicketRequest'
+      responses:
+        '201':
+          description: Ticket created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorTicket'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: bookId does not belong to the calling author
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    get:
+      tags: [Tickets]
+      summary: List tickets (paginated)
+      description: |
+        - **AUTHOR**: own tickets only. Filters: `status`, `q`, `sort=newest|oldest`.
+        - **ADMIN**: all tickets. Extra filters: `category`, `priority`, `authorId`, `bookId`,
+          `assignedTo` (`me|unassigned|<userId>`), `needsManualTriage`, `from`, `to`, `q`,
+          `sort=urgency` (default) `|newest|oldest`.
+
+        **Urgency sort** (DB-level): unresolved (OPEN/IN_PROGRESS) before resolved (RESOLVED/CLOSED),
+        then CRITICAL > HIGH > MEDIUM > LOW, then oldest createdAt first. Implemented with a SQL
+        `CASE` expression via `$queryRaw` on matching ids, then full rows fetched in one `IN` query.
+      operationId: listTickets
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: status
+          in: query
+          schema: { type: string, enum: [OPEN, IN_PROGRESS, RESOLVED, CLOSED] }
+        - name: category
+          in: query
+          description: Admin only.
+          schema: { type: string, enum: [ROYALTY_PAYMENTS, ISBN_METADATA, PRINTING_QUALITY, DISTRIBUTION_AVAILABILITY, BOOK_STATUS_PRODUCTION, GENERAL_INQUIRY] }
+        - name: priority
+          in: query
+          description: Admin only.
+          schema: { type: string, enum: [CRITICAL, HIGH, MEDIUM, LOW] }
+        - name: authorId
+          in: query
+          description: Admin only.
+          schema: { type: string }
+        - name: bookId
+          in: query
+          description: Admin only.
+          schema: { type: string }
+        - name: assignedTo
+          in: query
+          description: 'Admin only. Values: `me`, `unassigned`, or a user id.'
+          schema: { type: string }
+        - name: needsManualTriage
+          in: query
+          description: Admin only.
+          schema: { type: boolean }
+        - name: from
+          in: query
+          description: 'Admin only. YYYY-MM-DD lower bound on createdAt.'
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          description: 'Admin only. YYYY-MM-DD upper bound on createdAt (inclusive).'
+          schema: { type: string, format: date }
+        - name: q
+          in: query
+          description: 'Text search on subject, description, and ticket number (e.g. "BL-1003" or "1003").'
+          schema: { type: string, maxLength: 200 }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [urgency, newest, oldest] }
+      responses:
+        '200':
+          description: Paginated list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /tickets/{id}:
+    get:
+      tags: [Tickets]
+      summary: Get one ticket
+      description: |
+        AUTHOR can only read their own tickets. Another author's ticket and a nonexistent id both
+        return the same 404. ADMIN can read any ticket.
+
+        The response schema differs by role: AUTHOR receives `AuthorTicket`; ADMIN receives `AdminTicket`
+        (which is a superset).
+      operationId: getTicket
+      parameters:
+        - $ref: '#/components/parameters/TicketId'
+      responses:
+        '200':
+          description: The ticket (author or admin shape depending on caller role)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/AuthorTicket'
+                  - $ref: '#/components/schemas/AdminTicket'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tickets/{id}/messages:
+    get:
+      tags: [Tickets]
+      summary: Get messages for a ticket
+      description: |
+        Ordered oldest → newest. **INTERNAL_NOTE** rows are excluded at the repository query level
+        for AUTHOR callers (not filtered afterwards). ADMIN_REPLY sender is shown as
+        `"BookLeaf Support"` to authors; real name only for admins.
+      operationId: getTicketMessages
+      parameters:
+        - $ref: '#/components/parameters/TicketId'
+      responses:
+        '200':
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TicketMessage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [Tickets]
+      summary: Author follow-up message
+      description: |
+        AUTHOR only, own ticket. Not allowed if status is CLOSED (409). If RESOLVED, reopens to OPEN.
+        Emits `ticket.message.created` and (if reopened) `ticket.updated`.
+      operationId: createTicketMessage
+      parameters:
+        - $ref: '#/components/parameters/TicketId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMessageRequest'
+      responses:
+        '201':
+          description: Message created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketMessage'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Ticket is CLOSED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -219,6 +415,12 @@ components:
       description: Admin only. Ignored for authors.
       schema: { type: string, maxLength: 50 }
       example: AUTH007
+    TicketId:
+      name: id
+      in: path
+      required: true
+      description: Ticket cuid, e.g. `seed-ticket-1001`.
+      schema: { type: string, minLength: 1, maxLength: 64 }
 
   responses:
     ValidationError:
@@ -469,3 +671,186 @@ components:
         inProductionCount: { type: integer }
         payoutThreshold: { type: integer, example: 1000 }
         pendingBelowThreshold: { type: boolean, description: 'Author-level: 0 < totalPending < payoutThreshold.' }
+
+    # ------------------------------------------------------------------
+    # Ticket schemas (Phase 5)
+    # ------------------------------------------------------------------
+
+    TicketStatus:
+      type: string
+      enum: [OPEN, IN_PROGRESS, RESOLVED, CLOSED]
+
+    TicketCategory:
+      type: string
+      enum: [ROYALTY_PAYMENTS, ISBN_METADATA, PRINTING_QUALITY, DISTRIBUTION_AVAILABILITY, BOOK_STATUS_PRODUCTION, GENERAL_INQUIRY]
+
+    Priority:
+      type: string
+      enum: [CRITICAL, HIGH, MEDIUM, LOW]
+
+    FieldSource:
+      type: string
+      enum: [AI, FALLBACK, ADMIN]
+
+    AiStatus:
+      type: string
+      enum: [PENDING, DONE, FAILED, SKIPPED]
+
+    MessageType:
+      type: string
+      enum: [AUTHOR_MESSAGE, ADMIN_REPLY, INTERNAL_NOTE]
+
+    AttachmentMeta:
+      type: object
+      description: File metadata only; actual bytes are never uploaded.
+      required: [name, size, type]
+      properties:
+        name: { type: string, maxLength: 255 }
+        size: { type: integer, description: 'File size in bytes, max 10 MB.' }
+        type: { type: string, description: MIME type. }
+
+    CreateTicketRequest:
+      type: object
+      required: [subject, description]
+      properties:
+        bookId:
+          type: string
+          nullable: true
+          description: 'Book id linked to this ticket, or null for General/Account Level queries.'
+        subject:
+          type: string
+          minLength: 5
+          maxLength: 150
+        description:
+          type: string
+          minLength: 20
+          maxLength: 5000
+        attachments:
+          type: array
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/AttachmentMeta'
+
+    CreateMessageRequest:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 5000 }
+
+    AuthorTicket:
+      type: object
+      description: Ticket as seen by an AUTHOR. Never contains admin-only fields.
+      required: [id, ticketNumber, ticketNumberRaw, subject, description, status, book, attachments, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        ticketNumber: { type: string, example: 'BL-1001', description: 'Human-readable display format.' }
+        ticketNumberRaw: { type: integer, example: 1001 }
+        subject: { type: string }
+        description: { type: string }
+        status: { $ref: '#/components/schemas/TicketStatus' }
+        book:
+          nullable: true
+          description: Linked book summary, or null for General/Account Level tickets.
+          allOf:
+            - type: object
+              required: [id, title]
+              properties:
+                id: { type: string }
+                title: { type: string }
+        attachments:
+          type: array
+          items: { $ref: '#/components/schemas/AttachmentMeta' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    AdminTicket:
+      description: Ticket as seen by an ADMIN. Superset of AuthorTicket.
+      allOf:
+        - $ref: '#/components/schemas/AuthorTicket'
+        - type: object
+          required:
+            - author
+            - category
+            - categorySource
+            - priority
+            - prioritySource
+            - aiStatus
+            - aiReasoning
+            - aiError
+            - needsManualTriage
+            - assignedTo
+            - firstResponseAt
+            - resolvedAt
+            - ageHours
+            - isOverdue
+            - messageCount
+          properties:
+            author:
+              type: object
+              required: [id, name, email]
+              properties:
+                id: { type: string }
+                name: { type: string }
+                email: { type: string, format: email }
+            category:
+              nullable: true
+              allOf:
+                - $ref: '#/components/schemas/TicketCategory'
+            categorySource:
+              nullable: true
+              allOf:
+                - $ref: '#/components/schemas/FieldSource'
+            priority: { $ref: '#/components/schemas/Priority' }
+            prioritySource:
+              nullable: true
+              allOf:
+                - $ref: '#/components/schemas/FieldSource'
+            aiStatus: { $ref: '#/components/schemas/AiStatus' }
+            aiReasoning: { type: string, nullable: true }
+            aiError: { type: string, nullable: true }
+            needsManualTriage: { type: boolean }
+            assignedTo:
+              nullable: true
+              description: Assigned admin user, or null if unassigned.
+              allOf:
+                - type: object
+                  required: [id, name]
+                  properties:
+                    id: { type: string }
+                    name: { type: string }
+            firstResponseAt: { type: string, format: date-time, nullable: true }
+            resolvedAt: { type: string, format: date-time, nullable: true }
+            ageHours: { type: number, description: 'Hours since ticket creation, rounded to 1 decimal.' }
+            isOverdue: { type: boolean, description: 'True when OPEN/IN_PROGRESS with no first response and age > SLA limit.' }
+            messageCount: { type: integer }
+
+    TicketMessage:
+      type: object
+      required: [id, ticketId, type, body, aiAssisted, createdAt, sender]
+      properties:
+        id: { type: string }
+        ticketId: { type: string }
+        type: { $ref: '#/components/schemas/MessageType' }
+        body: { type: string }
+        aiAssisted: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        sender:
+          type: object
+          required: [id, displayName]
+          properties:
+            id: { type: string }
+            displayName:
+              type: string
+              description: '"BookLeaf Support" for ADMIN_REPLY when shown to authors; real name otherwise.'
+
+    TicketListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/AuthorTicket'
+              - $ref: '#/components/schemas/AdminTicket'
+        meta: { $ref: '#/components/schemas/PaginationMeta' }

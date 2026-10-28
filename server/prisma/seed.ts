@@ -416,10 +416,19 @@ export async function runSeed(prisma: PrismaClient, log: (m: string) => void = (
     }),
   });
 
-  // Seeded rows set ticketNumber explicitly, so move the sequence past them (next ticket = max + 1).
-  await prisma.$executeRawUnsafe(
-    `SELECT setval(pg_get_serial_sequence('"Ticket"', 'ticketNumber'), GREATEST((SELECT COALESCE(MAX("ticketNumber"), 0) FROM "Ticket"), 1000))`,
-  );
+  // Seeded rows set ticketNumber explicitly, so move the sequence past them.
+  // GREATEST also includes the sequence's current last_value so concurrent runSeed calls
+  // can never lower a value that was already allocated by nextval() in a parallel API request.
+  await prisma.$executeRawUnsafe(`
+    SELECT setval(
+      pg_get_serial_sequence('"Ticket"', 'ticketNumber'),
+      GREATEST(
+        (SELECT last_value FROM "Ticket_ticketNumber_seq"),
+        (SELECT COALESCE(MAX("ticketNumber"), 0) FROM "Ticket"),
+        1000
+      )
+    )
+  `);
   log('tickets and messages inserted');
 
   const [authorCount, bookCount, userCount, ticketCount] = await Promise.all([

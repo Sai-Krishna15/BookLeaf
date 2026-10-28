@@ -67,6 +67,25 @@ function prisma_cli(args: string[], direct: string): void {
   }
 }
 
+/** Retries an async operation up to `maxAttempts` times on transient Neon ETIMEDOUT errors. */
+async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3, delayMs = 2000): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const code = (err as { code?: string })?.code;
+      const prismaCode = (err as { meta?: { clientVersion?: string }; code?: string })?.code;
+      // Retry on Neon cold-start timeouts
+      const isTransient = code === 'ETIMEDOUT' || prismaCode === 'ETIMEDOUT' ||
+        (err instanceof Error && err.message.includes('ETIMEDOUT'));
+      if (!isTransient || attempt === maxAttempts) throw err;
+      await new Promise((res) => setTimeout(res, delayMs * attempt));
+    }
+  }
+  throw lastErr;
+}
+
 /** Applies migrations and seeds the test database. Idempotent. `reset` drops everything first. */
 export async function prepareTestDatabase(log: (m: string) => void = () => {}, opts: { reset?: boolean } = {}): Promise<void> {
   const testUrl = assertSafeTestDatabase(process.env.DATABASE_URL_TEST, mainDatabaseUrl());
@@ -81,12 +100,15 @@ export async function prepareTestDatabase(log: (m: string) => void = () => {}, o
   }
 
   log('seeding test database');
-  const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: testUrl }) });
-  try {
-    await runSeed(prisma, log);
-  } finally {
-    await prisma.$disconnect();
-  }
+  // Wrapped in withRetry to handle Neon serverless cold-start ETIMEDOUT errors.
+  await withRetry(async () => {
+    const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: testUrl }) });
+    try {
+      await runSeed(prisma, log);
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
 }
 
 if (require.main === module) {

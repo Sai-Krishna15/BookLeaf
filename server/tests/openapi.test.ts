@@ -12,6 +12,12 @@ const IMPLEMENTED: Array<[string, string]> = [
   ['/books', 'get'],
   ['/books/summary', 'get'],
   ['/books/{id}', 'get'],
+  // Phase 5: tickets
+  ['/tickets', 'post'],
+  ['/tickets', 'get'],
+  ['/tickets/{id}', 'get'],
+  ['/tickets/{id}/messages', 'get'],
+  ['/tickets/{id}/messages', 'post'],
 ];
 
 describe('openapi.yaml', () => {
