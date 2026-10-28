@@ -2,6 +2,9 @@ import * as React from 'react';
 import { AUTH_TOKEN_KEY, setOnUnauthorizedCallback } from '@/lib/api';
 import { authApi } from '@/features/auth/auth.api';
 import type { AuthorProfile, User } from '@/features/auth/types';
+import { queryClient } from './QueryProvider';
+import { clearUnreadTickets } from '@/features/tickets/hooks/useAuthorTicketRealtime';
+import { clearUnreadAdminTickets } from '@/features/admin/hooks/useAdminTicketRealtime';
 
 interface AuthContextValue {
   token: string | null;
@@ -9,7 +12,7 @@ interface AuthContextValue {
   author: AuthorProfile | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  setAuth: (token: string, user: User) => void;
+  setAuth: (token: string, user: User, author?: AuthorProfile | null) => void;
   logout: () => void;
 }
 
@@ -32,17 +35,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = React.useState<boolean>(true);
 
   const logout = React.useCallback(() => {
+    // 1. Wipe all TanStack Query cache completely to prevent cross-user data leakage
+    queryClient.clear();
+
+    // 2. Clear realtime unread memory stores
+    clearUnreadTickets();
+    clearUnreadAdminTickets();
+
+    // 3. Clear auth token and any draft composers from sessionStorage
     sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const key = sessionStorage.key(i);
+      if (key && (key.startsWith('bookleaf_draft_') || key.startsWith('bookleaf_note_'))) {
+        sessionStorage.removeItem(key);
+      }
+    }
+
+    // 4. Reset React state
     setToken(null);
     setUser(null);
     setAuthor(null);
   }, []);
 
-  const setAuth = React.useCallback((newToken: string, newUser: User) => {
-    sessionStorage.setItem(AUTH_TOKEN_KEY, newToken);
-    setToken(newToken);
-    setUser(newUser);
-  }, []);
+  const setAuth = React.useCallback(
+    (newToken: string, newUser: User, newAuthor: AuthorProfile | null = null) => {
+      // Clear any previous session queries
+      queryClient.clear();
+      clearUnreadTickets();
+      clearUnreadAdminTickets();
+
+      sessionStorage.setItem(AUTH_TOKEN_KEY, newToken);
+      setToken(newToken);
+      setUser(newUser);
+      setAuthor(newAuthor);
+    },
+    [],
+  );
 
   React.useEffect(() => {
     setOnUnauthorizedCallback(logout);

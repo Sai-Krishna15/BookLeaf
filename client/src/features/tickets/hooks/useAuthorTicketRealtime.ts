@@ -27,6 +27,11 @@ export function markTicketAsRead(ticketId: string) {
   }
 }
 
+export function clearUnreadTickets() {
+  unreadTicketIds.clear();
+  notifyListeners();
+}
+
 export function useUnreadTickets() {
   const [, setTick] = React.useState(0);
 

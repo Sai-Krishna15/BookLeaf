@@ -86,7 +86,17 @@ export function LoginPage() {
     setErrorMessage(null);
     try {
       const res = await authApi.login(values);
-      setAuth(res.token, res.user);
+      // Temporarily write token so getMe request interceptor has it
+      sessionStorage.setItem('bookleaf_token', res.token);
+      let authorProfile = null;
+      try {
+        const me = await authApi.getMe();
+        authorProfile = me.author;
+      } catch {
+        // Fallback if me fetch fails
+      }
+
+      setAuth(res.token, res.user, authorProfile);
       const target = res.user.role === 'ADMIN' ? '/admin/tickets' : '/books';
       navigate(target, { replace: true });
     } catch (err) {

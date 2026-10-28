@@ -31,6 +31,13 @@ export function markAdminTicketAsRead(ticketId: string) {
   }
 }
 
+export function clearUnreadAdminTickets() {
+  unreadTicketsSet.clear();
+  newTicketsCount = 0;
+  notifyListeners();
+  notifyNewTicketsListeners();
+}
+
 export function useUnreadAdminTickets() {
   const [, forceUpdate] = React.useReducer((x) => x + 1, 0);
 

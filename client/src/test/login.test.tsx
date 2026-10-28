@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { AuthProvider } from '@/app/providers/AuthProvider';
+import { queryClient } from '@/app/providers/QueryProvider';
 import { authApi } from '@/features/auth/auth.api';
 import { ApiError } from '@/lib/api';
 
@@ -11,6 +12,16 @@ describe('LoginPage', () => {
   beforeEach(() => {
     sessionStorage.clear();
     vi.restoreAllMocks();
+    vi.spyOn(authApi, 'getMe').mockResolvedValue({
+      user: {
+        id: 'user-default',
+        name: 'Default User',
+        email: 'default@example.com',
+        role: 'AUTHOR',
+        authorId: 'AUTH001',
+      },
+      author: null,
+    });
   });
 
   const renderLogin = (initialEntries = ['/login']) => {
@@ -128,5 +139,33 @@ describe('LoginPage', () => {
       expect(screen.getByText('Admin Tickets Queue')).toBeInTheDocument();
     });
     expect(sessionStorage.getItem('bookleaf_token')).toBe('valid-admin-token');
+  });
+
+  it('clears queryClient cache when authenticating a new user to prevent stale data leaking', async () => {
+    const user = userEvent.setup();
+    const clearSpy = vi.spyOn(queryClient, 'clear');
+
+    vi.spyOn(authApi, 'login').mockResolvedValueOnce({
+      token: 'fresh-token',
+      user: {
+        id: 'user-new',
+        name: 'New Author',
+        email: 'new.author@example.com',
+        role: 'AUTHOR',
+        authorId: 'AUTH999',
+      },
+    });
+
+    renderLogin();
+
+    await user.type(screen.getByLabelText(/email/i), 'new.author@example.com');
+    await user.type(screen.getByLabelText(/password/i), 'Test@1234');
+    await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Author Books Portal')).toBeInTheDocument();
+    });
+
+    expect(clearSpy).toHaveBeenCalled();
   });
 });
