@@ -1,7 +1,7 @@
 import type { ErrorRequestHandler, Response } from 'express';
 import { ZodError } from 'zod';
 import { AppError, ConflictError, NotFoundError, ValidationError } from '../common/errors';
-import { isProduction } from '../config/env';
+import { isProduction, isTest } from '../config/env';
 import { logger } from '../config/logger';
 
 export interface ErrorBody {

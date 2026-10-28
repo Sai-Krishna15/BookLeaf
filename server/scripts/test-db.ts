@@ -68,17 +68,22 @@ function prisma_cli(args: string[], direct: string): void {
 }
 
 /** Retries an async operation up to `maxAttempts` times on transient Neon ETIMEDOUT errors. */
-async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3, delayMs = 2000): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 5, delayMs = 3000): Promise<T> {
   let lastErr: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       return await fn();
     } catch (err) {
+      lastErr = err;
       const code = (err as { code?: string })?.code;
-      const prismaCode = (err as { meta?: { clientVersion?: string }; code?: string })?.code;
-      // Retry on Neon cold-start timeouts
-      const isTransient = code === 'ETIMEDOUT' || prismaCode === 'ETIMEDOUT' ||
-        (err instanceof Error && err.message.includes('ETIMEDOUT'));
+      // Retry on Neon cold-start timeouts and connection resets
+      const isTransient =
+        code === 'ETIMEDOUT' ||
+        code === 'ECONNRESET' ||
+        (err instanceof Error &&
+          (err.message.includes('ETIMEDOUT') ||
+            err.message.includes('timeout') ||
+            err.message.includes('Connection terminated')));
       if (!isTransient || attempt === maxAttempts) throw err;
       await new Promise((res) => setTimeout(res, delayMs * attempt));
     }

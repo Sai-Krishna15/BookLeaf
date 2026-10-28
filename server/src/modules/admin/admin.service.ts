@@ -182,16 +182,11 @@ export const adminService = {
       }
     }
 
-    const setFirstResponseAt = ticket.firstResponseAt === null;
-    const moveToInProgress = ticket.status === 'OPEN';
-
-    const { message, ticket: updatedTicket } = await adminRepository.adminReplyTx({
+    const { message, ticket: updatedTicket, movedToInProgress } = await adminRepository.adminReplyTx({
       ticketId,
       senderId: adminId,
       body: body.body,
       draftId: body.draftId,
-      setFirstResponseAt,
-      moveToInProgress,
     });
 
     domainEvents.emit('ticket.message.created', {
@@ -201,7 +196,7 @@ export const adminService = {
       senderId: adminId,
     });
 
-    if (moveToInProgress) {
+    if (movedToInProgress) {
       domainEvents.emit('ticket.updated', { ticketId, status: 'IN_PROGRESS' });
     }
 

@@ -84,26 +84,32 @@ export const adminRepository = {
   /**
    * Atomically:
    *  1. Creates the ADMIN_REPLY message (optionally marks it aiAssisted if draftId provided).
-   *  2. Sets firstResponseAt on the ticket if setFirstResponseAt=true.
-   *  3. Moves ticket status OPEN→IN_PROGRESS if moveToInProgress=true.
+   *  2. Conditionally sets firstResponseAt ONLY if it is currently NULL (preserves earlier timestamp).
+   *  3. Conditionally moves status OPEN→IN_PROGRESS ONLY if status is currently OPEN (never overwrites RESOLVED).
+   *  4. Fetches and returns the fresh ticket state.
    *
-   * Uses prisma.$transaction([...]) — one atomic commit.
+   * Uses prisma.$transaction([...]) — one atomic commit with race-safe conditional updates.
    */
   async adminReplyTx(params: {
     ticketId: string;
     senderId: string;
     body: string;
     draftId?: string;
-    setFirstResponseAt: boolean;
-    moveToInProgress: boolean;
-  }): Promise<{ message: MessageRow; ticket: TicketRow }> {
-    const { ticketId, senderId, body, draftId, setFirstResponseAt, moveToInProgress } = params;
+  }): Promise<{ message: MessageRow; ticket: TicketRow; movedToInProgress: boolean }> {
+    const { ticketId, senderId, body, draftId } = params;
 
-    const ticketUpdateData: Prisma.TicketUpdateInput = {};
-    if (setFirstResponseAt) ticketUpdateData.firstResponseAt = new Date();
-    if (moveToInProgress) ticketUpdateData.status = 'IN_PROGRESS';
-
-    const [message, ticket] = await prisma.$transaction([
+    const [_firstRespRes, statusRes, message, ticket] = await prisma.$transaction([
+      // Conditional write: only set firstResponseAt if it is still null.
+      // Updating parent row first prevents FK lock deadlocks during concurrent replies.
+      prisma.ticket.updateMany({
+        where: { id: ticketId, firstResponseAt: null },
+        data: { firstResponseAt: new Date() },
+      }),
+      // Conditional write: only move OPEN -> IN_PROGRESS if status is still OPEN
+      prisma.ticket.updateMany({
+        where: { id: ticketId, status: 'OPEN' },
+        data: { status: 'IN_PROGRESS' },
+      }),
       prisma.ticketMessage.create({
         data: {
           ticketId,
@@ -115,14 +121,17 @@ export const adminRepository = {
         },
         select: MESSAGE_SELECT,
       }),
-      prisma.ticket.update({
+      prisma.ticket.findUniqueOrThrow({
         where: { id: ticketId },
-        data: Object.keys(ticketUpdateData).length > 0 ? ticketUpdateData : { updatedAt: new Date() },
         select: TICKET_SELECT,
       }),
     ]);
 
-    return { message, ticket };
+    return {
+      message,
+      ticket,
+      movedToInProgress: statusRes.count > 0,
+    };
   },
 
   // ---- Validate draft ownership ------------------------------------------

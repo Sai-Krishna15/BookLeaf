@@ -2,19 +2,28 @@
  * Admin module integration tests — supertest against the test DB.
  */
 import request from 'supertest';
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app';
 import { domainEvents } from '../src/common/domainEvents';
 import { prisma } from '../src/config/prisma';
+import { adminRepository } from '../src/modules/admin/admin.repository';
 
 const app = createApp();
 
 const tokens: Record<string, string> = {};
 
 async function login(key: string, email: string, password: string) {
-  const res = await request(app).post('/api/v1/auth/login').send({ email, password });
-  expect(res.status, `login failed for ${key}: ${JSON.stringify(res.body)}`).toBe(200);
-  tokens[key] = res.body.token as string;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const res = await request(app).post('/api/v1/auth/login').send({ email, password });
+    if (res.status === 200) {
+      tokens[key] = res.body.token as string;
+      return;
+    }
+    if (attempt === 3) {
+      expect(res.status, `login failed for ${key}: ${JSON.stringify(res.body)}`).toBe(200);
+    }
+    await new Promise((r) => setTimeout(r, 1000 * attempt));
+  }
 }
 
 const get = (url: string, who?: string) => {
@@ -551,25 +560,78 @@ describe('POST /api/v1/admin/tickets/:id/reply', () => {
   });
 
   it('reply transaction atomicity: failure mid-way rolls back and persists nothing', async () => {
-    // Spying on prisma.ticket.update to reject during adminReplyTx
-    const updateSpy = vi.spyOn(prisma.ticket, 'update').mockRejectedValueOnce(new Error('Simulated DB failure'));
+    // Calling adminReplyTx with a non-existent senderId triggers a Foreign Key violation in the transaction
+    const initialTicket = await prisma.ticket.findUniqueOrThrow({ where: { id: replyTicketId } });
+    const initialFirstResponse = initialTicket.firstResponseAt;
+    const testBody = 'Atomic rollback test message that must never persist';
 
-    const testBody = 'This reply should never be persisted due to atomic transaction rollback';
-    try {
-      await expect(
-        post(`/api/v1/admin/tickets/${replyTicketId}/reply`, 'admin', {
-          body: testBody,
-        }),
-      ).resolves.toMatchObject({ status: 500 });
+    await expect(
+      adminRepository.adminReplyTx({
+        ticketId: replyTicketId,
+        senderId: 'non-existent-user-id',
+        body: testBody,
+      }),
+    ).rejects.toThrow();
 
-      // Verify message was not saved
-      const msg = await prisma.ticketMessage.findFirst({
-        where: { body: testBody },
-      });
-      expect(msg).toBeNull();
-    } finally {
-      updateSpy.mockRestore();
-    }
+    // Verify message was not saved
+    const msg = await prisma.ticketMessage.findFirst({
+      where: { body: testBody },
+    });
+    expect(msg).toBeNull();
+
+    // Verify ticket was not changed
+    const ticketAfter = await prisma.ticket.findUniqueOrThrow({ where: { id: replyTicketId } });
+    expect(ticketAfter.firstResponseAt).toEqual(initialFirstResponse);
+  });
+
+  it('fires two replies concurrently (Promise.all): firstResponseAt is preserved and ticket is not forced back from RESOLVED', async () => {
+    // Create a fresh ticket in OPEN status
+    const freshTicket = await prisma.ticket.create({
+      data: {
+        authorId: 'AUTH003',
+        subject: 'Concurrent replies race test ticket',
+        description: 'Testing concurrent reply race safety and RESOLVED status preservation.',
+        status: 'OPEN',
+        priority: 'MEDIUM',
+      },
+    });
+
+    // Fire two replies concurrently
+    const [res1, res2] = await Promise.all([
+      post(`/api/v1/admin/tickets/${freshTicket.id}/reply`, 'admin', { body: 'Concurrent reply 1' }),
+      post(`/api/v1/admin/tickets/${freshTicket.id}/reply`, 'ops', { body: 'Concurrent reply 2' }),
+    ]);
+
+    expect(res1.status, `res1 failed: ${res1.text}`).toBe(201);
+    expect(res2.status, `res2 failed: ${res2.text}`).toBe(201);
+
+    // Fetch the ticket from DB
+    const updated = await prisma.ticket.findUnique({
+      where: { id: freshTicket.id },
+      include: { messages: { where: { type: 'ADMIN_REPLY' }, orderBy: { createdAt: 'asc' } } },
+    });
+    expect(updated).not.toBeNull();
+    expect(updated!.status).toBe('IN_PROGRESS');
+    expect(updated!.firstResponseAt).not.toBeNull();
+    // Earliest admin reply timestamp matches or precedes firstResponseAt
+    const earliestReplyTime = updated!.messages[0]!.createdAt.getTime();
+    expect(Math.abs(updated!.firstResponseAt!.getTime() - earliestReplyTime)).toBeLessThan(2000);
+
+    // Now set the ticket to RESOLVED
+    await prisma.ticket.update({
+      where: { id: freshTicket.id },
+      data: { status: 'RESOLVED', resolvedAt: new Date() },
+    });
+
+    // Send another reply to the RESOLVED ticket: must stay RESOLVED
+    const res3 = await post(`/api/v1/admin/tickets/${freshTicket.id}/reply`, 'admin', {
+      body: 'Follow-up reply on resolved ticket',
+    });
+    expect(res3.status).toBe(201);
+    expect(res3.body.ticket.status).toBe('RESOLVED'); // NOT forced back to IN_PROGRESS
+
+    const finalTicket = await prisma.ticket.findUnique({ where: { id: freshTicket.id } });
+    expect(finalTicket!.status).toBe('RESOLVED');
   });
 });
 
