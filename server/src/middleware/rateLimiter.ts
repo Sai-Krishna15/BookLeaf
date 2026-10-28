@@ -54,3 +54,24 @@ export const ticketCreateRateLimiter = rateLimit({
     sendError(res, req.requestId, new RateLimitError('Too many ticket submissions. Please wait before trying again.'));
   },
 });
+
+/**
+ * Rate limit for POST /admin/tickets/:id/draft/regenerate (6 per minute per admin/IP).
+ */
+export const draftRegenerateRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 6,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  skip: () => isTest && process.env.ENABLE_RATE_LIMIT_IN_TESTS !== 'true',
+  keyGenerator: (req: Request) => {
+    return req.user?.id ?? ipKeyGenerator(req.ip ?? '');
+  },
+  handler: (req: Request, res: Response) => {
+    sendError(
+      res,
+      req.requestId,
+      new RateLimitError('Too many draft regeneration requests. Please wait a minute before trying again.'),
+    );
+  },
+});

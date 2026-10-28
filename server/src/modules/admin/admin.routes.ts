@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireRole } from '../../middleware/requireRole';
 import { validate } from '../../middleware/validate';
+import { draftRegenerateRateLimiter } from '../../middleware/rateLimiter';
 import { adminController } from './admin.controller';
 import {
   patchTicketBodySchema,
@@ -37,6 +38,19 @@ router.post(
   '/tickets/:id/reply',
   validate({ params: adminTicketIdParamSchema, body: replyBodySchema }),
   adminController.adminReply,
+);
+
+router.get(
+  '/tickets/:id/draft',
+  validate({ params: adminTicketIdParamSchema }),
+  adminController.getDraft,
+);
+
+router.post(
+  '/tickets/:id/draft/regenerate',
+  draftRegenerateRateLimiter,
+  validate({ params: adminTicketIdParamSchema }),
+  adminController.regenerateDraft,
 );
 
 router.post(

@@ -167,7 +167,7 @@ export const adminService = {
     adminId: string,
     ticketId: string,
     body: ReplyBody,
-  ): Promise<{ message: MessageDto; ticket: AdminTicketDto }> {
+  ): Promise<{ message: MessageDto; ticket: AdminTicketDto; editedFromDraft: boolean }> {
     const ticket = await adminRepository.findById(ticketId);
     if (!ticket) throw new NotFoundError('Ticket not found');
 
@@ -176,11 +176,13 @@ export const adminService = {
     }
 
     // Validate draftId if provided — must belong to this ticket
+    let editedFromDraft = false;
     if (body.draftId !== undefined) {
       const draft = await adminRepository.findDraft(body.draftId, ticketId);
       if (!draft) {
         throw new ValidationError('draftId does not belong to this ticket');
       }
+      editedFromDraft = draft.body.trim() !== body.body.trim();
     }
 
     const { message, ticket: updatedTicket, movedToInProgress } = await adminRepository.adminReplyTx({
@@ -204,6 +206,7 @@ export const adminService = {
     return {
       message: toMessageDto(message, true),
       ticket: toAdminTicketDto(updatedTicket, new Date()),
+      editedFromDraft,
     };
   },
 
@@ -226,5 +229,17 @@ export const adminService = {
     if (!ticket) throw new NotFoundError('Ticket not found');
     await aiService.reclassifyTicket(ticketId);
     return toAdminTicketDto(ticket, new Date());
+  },
+
+  // ---- GET /admin/tickets/:id/draft --------------------------------------
+
+  getDraft(ticketId: string) {
+    return aiService.getOrGenerateDraft(ticketId, false);
+  },
+
+  // ---- POST /admin/tickets/:id/draft/regenerate ---------------------------
+
+  regenerateDraft(ticketId: string) {
+    return aiService.getOrGenerateDraft(ticketId, true);
   },
 };

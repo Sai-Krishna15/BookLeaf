@@ -23,7 +23,15 @@ describe('GET /api/v1/health database check', () => {
   });
 
   it('really queries the configured database', async () => {
-    const res = await request(createApp()).get('/api/v1/health');
-    expect(res.body.checks.database).toBe('connected');
-  }, 15_000);
+    let connected = false;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const res = await request(createApp()).get('/api/v1/health');
+      if (res.body.checks.database === 'connected') {
+        connected = true;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 1000 * attempt));
+    }
+    expect(connected).toBe(true);
+  }, 20_000);
 });

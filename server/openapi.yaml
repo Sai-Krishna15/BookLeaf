@@ -559,6 +559,61 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /admin/tickets/{id}/draft:
+    get:
+      tags: [Admin]
+      summary: Get or generate AI draft reply
+      description: |
+        ADMIN only. Returns a cached draft reply or generates a new one.
+        If a new author message was received after the draft was generated, it is automatically regenerated.
+        When AI is unavailable, returns 200 with status "unavailable" and canned manual templates.
+      operationId: getTicketDraft
+      parameters:
+        - $ref: '#/components/parameters/TicketId'
+      responses:
+        '200':
+          description: Draft reply response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DraftResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/tickets/{id}/draft/regenerate:
+    post:
+      tags: [Admin]
+      summary: Force regenerate AI draft reply
+      description: |
+        ADMIN only. Bypasses cached drafts and forces generation of a fresh draft reply.
+        Rate-limited to 6 calls per minute.
+      operationId: regenerateTicketDraft
+      parameters:
+        - $ref: '#/components/parameters/TicketId'
+      responses:
+        '200':
+          description: Fresh draft response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DraftResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          description: Too many draft regenerations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /admin/tickets/{id}/reclassify:
     post:
       tags: [Admin]
@@ -1126,12 +1181,15 @@ components:
 
     AdminReplyResponse:
       type: object
-      required: [message, ticket]
+      required: [message, ticket, editedFromDraft]
       properties:
         message:
           $ref: '#/components/schemas/TicketMessage'
         ticket:
           $ref: '#/components/schemas/AdminTicket'
+        editedFromDraft:
+          type: boolean
+          description: True if the admin modified the AI draft body before sending.
 
     AdminUser:
       type: object
@@ -1176,7 +1234,7 @@ components:
 
     AiUsageReport:
       type: object
-      required: [windowDays, from, to, totals, byKindAndProvider]
+      required: [windowDays, from, to, totals, draftMetrics, byKindAndProvider]
       properties:
         windowDays: { type: integer }
         from: { type: string, format: date-time }
@@ -1191,6 +1249,14 @@ components:
             inputTokens: { type: integer }
             outputTokens: { type: integer }
             averageLatencyMs: { type: integer }
+        draftMetrics:
+          type: object
+          required: [draftsGenerated, repliesFromDrafts, editedReplies, editedPercentage]
+          properties:
+            draftsGenerated: { type: integer }
+            repliesFromDrafts: { type: integer }
+            editedReplies: { type: integer }
+            editedPercentage: { type: integer }
         byKindAndProvider:
           type: array
           items:
@@ -1205,4 +1271,45 @@ components:
               inputTokens: { type: integer }
               outputTokens: { type: integer }
               averageLatencyMs: { type: integer }
+
+    CannedSnippet:
+      type: object
+      required: [id, title, template]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        template: { type: string }
+
+    DraftDetail:
+      type: object
+      required: [id, ticketId, body, warnings, createdAt, provider, model, stale]
+      properties:
+        id: { type: string }
+        ticketId: { type: string }
+        body: { type: string }
+        warnings:
+          type: array
+          items: { type: string }
+        createdAt: { type: string, format: date-time }
+        provider: { type: string }
+        model: { type: string }
+        stale: { type: boolean }
+
+    DraftResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ready, unavailable]
+        draft:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/DraftDetail'
+        reason:
+          type: string
+        snippets:
+          type: array
+          items:
+            $ref: '#/components/schemas/CannedSnippet'
 

@@ -26,6 +26,8 @@ const IMPLEMENTED: Array<[string, string]> = [
   ['/admin/admins', 'get'],
   ['/admin/stats', 'get'],
   ['/admin/tickets/{id}/reclassify', 'post'],
+  ['/admin/tickets/{id}/draft', 'get'],
+  ['/admin/tickets/{id}/draft/regenerate', 'post'],
   ['/admin/ai/usage', 'get'],
 ];
 

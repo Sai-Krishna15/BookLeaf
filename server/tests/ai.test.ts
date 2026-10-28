@@ -23,6 +23,15 @@ import { applyPriorityGuardrails } from '../src/modules/ai/priority.guardrails';
 import { aiService, registerAiDomainListeners } from '../src/modules/ai/ai.service';
 import { getAiUsageReport } from '../src/modules/ai/ai.usage.service';
 import { Priority, TicketCategory, FieldSource, AiStatus } from '../src/generated/prisma/enums';
+import { buildDraftContext, computeRoyaltyHint } from '../src/modules/ai/context.builder';
+import {
+  stripMarkdown,
+  enforceGreetingAndSignOff,
+  checkHallucinations,
+  validateAndCleanDraft,
+} from '../src/modules/ai/draft.validator';
+import { getCannedSnippets } from '../src/modules/ai/kb';
+import { buildDraftSystemPrompt, buildDraftUserPrompt } from '../src/modules/ai/prompts/draft.prompt';
 
 // ---------------------------------------------------------------------------
 // Mock LLM Provider
@@ -259,6 +268,220 @@ describe('AI Pure Modules', () => {
       expect(res.categorySource).toBe('FALLBACK');
     });
   });
+
+  describe('Phase 8B: context.builder', () => {
+    it('computes ground-truth book facts for a published book', () => {
+      const now = new Date('2024-10-15');
+      const ctx = buildDraftContext({
+        ticket: {
+          id: 't-1',
+          subject: 'Royalty status',
+          description: 'When will I be paid?',
+          category: TicketCategory.ROYALTY_PAYMENTS,
+          createdAt: now,
+        },
+        author: { id: 'a-1', name: 'Dr. Vikram Seth' },
+        book: {
+          id: 'b-1',
+          title: 'A Suitable Story',
+          status: 'Published & Live',
+          publicationDate: new Date('2024-01-15'),
+          totalCopiesSold: 50,
+          mrp: 400,
+          authorRoyaltyPerCopy: 60,
+          totalRoyaltyEarned: 3000,
+          royaltyPaid: 0,
+          royaltyPending: 3000,
+          lastRoyaltyPayoutDate: null,
+          printPartner: 'BookLeaf Standard Print Network',
+          availableOn: ['Amazon', 'Flipkart'],
+        },
+        now,
+      });
+
+      expect(ctx.authorFirstName).toBe('Dr.');
+      expect(ctx.bookFacts).toBeDefined();
+      expect(ctx.bookFacts?.isInProduction).toBe(false);
+      expect(ctx.bookFacts?.copiesSold).toBe(50);
+      expect(ctx.bookFacts?.mrp).toBe('₹400');
+      expect(ctx.bookFacts?.totalEarned).toBe('₹3,000');
+      expect(ctx.bookFacts?.paid).toBe('₹0');
+      expect(ctx.bookFacts?.pending).toBe('₹3,000');
+      expect(ctx.bookFacts?.lastPayoutDate).toBe('none yet');
+      expect(ctx.royaltyHint).toBe('POSSIBLY_OVERDUE');
+    });
+
+    it('computes production stage and NOT_APPLICABLE hint for book in production', () => {
+      const now = new Date('2024-10-15');
+      const ctx = buildDraftContext({
+        ticket: {
+          id: 't-2',
+          subject: 'Cover status',
+          description: 'How is cover design progressing?',
+          category: TicketCategory.BOOK_STATUS_PRODUCTION,
+          createdAt: now,
+        },
+        author: { id: 'a-2', name: 'Ananya Roy' },
+        book: {
+          id: 'b-2',
+          title: 'The Bengal Dawn',
+          status: 'In Production - Cover Design',
+          publicationDate: null,
+          totalCopiesSold: 0,
+          mrp: null,
+          authorRoyaltyPerCopy: null,
+          totalRoyaltyEarned: 0,
+          royaltyPaid: 0,
+          royaltyPending: 0,
+          lastRoyaltyPayoutDate: null,
+          printPartner: null,
+          availableOn: [],
+        },
+        now,
+      });
+
+      expect(ctx.authorFirstName).toBe('Ananya');
+      expect(ctx.bookFacts?.isInProduction).toBe(true);
+      expect(ctx.bookFacts?.currentProductionStage).toBe('Cover Design');
+      expect(ctx.bookFacts?.publicationDate).toContain('Not yet published');
+      expect(ctx.royaltyHint).toBe('NOT_APPLICABLE');
+    });
+
+    it('computes BELOW_THRESHOLD when pending royalty is under ₹1,000', () => {
+      const hint = computeRoyaltyHint(
+        {
+          id: 'b-3',
+          title: 'Short Stories',
+          status: 'Published & Live',
+          publicationDate: new Date('2024-05-01'),
+          totalCopiesSold: 10,
+          mrp: 200,
+          authorRoyaltyPerCopy: 30,
+          totalRoyaltyEarned: 850,
+          royaltyPaid: 0,
+          royaltyPending: 850,
+          lastRoyaltyPayoutDate: null,
+          printPartner: null,
+          availableOn: ['Amazon'],
+        },
+        null,
+        new Date('2024-10-15'),
+      );
+      expect(hint).toBe('BELOW_THRESHOLD');
+    });
+
+    it('scrubs PII and excludes internal notes from recent conversation history', () => {
+      const ctx = buildDraftContext({
+        ticket: {
+          id: 't-4',
+          subject: 'Call me at 9876543210',
+          description: 'Reach me at test@example.com or +919876543210 regarding ISBN',
+          category: TicketCategory.ISBN_METADATA,
+          createdAt: new Date(),
+        },
+        author: { id: 'a-4', name: 'Rohit Sharma' },
+        messages: [
+          { type: 'AUTHOR_MESSAGE', body: 'First note email me at test@foo.com', createdAt: new Date() },
+          { type: 'INTERNAL_NOTE', body: 'SECRET: Author is unhappy, handle with care', createdAt: new Date() },
+          { type: 'ADMIN_REPLY', body: 'We are looking into it', createdAt: new Date() },
+        ],
+      });
+
+      expect(ctx.ticketSubject).toContain('[REDACTED_PHONE]');
+      expect(ctx.ticketDescription).toContain('[REDACTED_EMAIL]');
+      expect(ctx.recentMessages).toHaveLength(2);
+      expect(ctx.recentMessages.some((m) => m.text.includes('SECRET'))).toBe(false);
+      expect(ctx.recentMessages[0]?.text).toContain('[REDACTED_EMAIL]');
+    });
+  });
+
+  describe('Phase 8B: draft.validator', () => {
+    it('strips markdown formatting (headers, bold, italics, bullets, code blocks)', () => {
+      const input = `# Heading 1
+Here is **bold** text and *italic* text.
+- Bullet item 1
+* Bullet item 2
+\`\`\`ts
+const code = 123;
+\`\`\`
+Regular text.`;
+
+      const stripped = stripMarkdown(input);
+      expect(stripped).not.toContain('#');
+      expect(stripped).not.toContain('**bold**');
+      expect(stripped).toContain('Here is bold text and italic text.');
+      expect(stripped).not.toContain('- Bullet');
+      expect(stripped).toContain('Bullet item 1');
+      expect(stripped).not.toContain('```');
+    });
+
+    it('enforces canonical greeting and sign-off', () => {
+      const input = `Hello Priya,
+We have verified your royalty records and everything is in order.
+Sincerely,
+BookLeaf Support`;
+
+      const cleaned = enforceGreetingAndSignOff(input, 'Priya');
+      expect(cleaned.startsWith('Hi Priya,')).toBe(true);
+      expect(cleaned.endsWith('Warm regards,\nBookLeaf Author Support Team')).toBe(true);
+    });
+
+    it('flags hallucinated numbers, currency, and dates while allowing policy numbers', () => {
+      const context = buildDraftContext({
+        ticket: {
+          id: 't-5',
+          subject: 'Royalty check',
+          description: 'Query about my royalty',
+          category: TicketCategory.ROYALTY_PAYMENTS,
+          createdAt: new Date(),
+        },
+        author: { id: 'a-5', name: 'Priya' },
+      });
+
+      // Text with allowed policy numbers (80%, 20%, 48 hours, 45 days, ₹1,000)
+      const validText = `Hi Priya,
+Under our standard 80/20 royalty policy, payouts are disbursed within 45 days following the quarter. Because your pending royalty is below ₹1,000, we will escalate this within 48 hours.
+Warm regards,
+BookLeaf Author Support Team`;
+
+      const noWarnings = checkHallucinations(validText, context);
+      expect(noWarnings).toHaveLength(0);
+
+      // Text with hallucinated currency, percentage, and unverified date
+      const hallucinatedText = `Hi Priya,
+You have earned ₹95,000 in royalties with a 35% commission. The payout was scheduled on 2029-12-31.
+Warm regards,
+BookLeaf Author Support Team`;
+
+      const warnings = checkHallucinations(hallucinatedText, context);
+      expect(warnings.some((w) => w.includes('₹95,000'))).toBe(true);
+      expect(warnings.some((w) => w.includes('35%'))).toBe(true);
+      expect(warnings.some((w) => w.includes('2029-12-31'))).toBe(true);
+    });
+
+    it('rejects empty or excessively short text with AiInvalidResponseError', () => {
+      const context = buildDraftContext({
+        ticket: { id: 't-6', subject: 'Hi', description: 'Hello', createdAt: new Date() },
+        author: { id: 'a-6', name: 'Priya' },
+      });
+
+      expect(() => validateAndCleanDraft('', context)).toThrow(AiInvalidResponseError);
+      expect(() => validateAndCleanDraft('Too short', context)).toThrow(AiInvalidResponseError);
+    });
+  });
+
+  describe('Phase 8B: kb & canned snippets', () => {
+    it('substitutes authorFirstName and bookTitle in canned snippets', () => {
+      const snippets = getCannedSnippets(TicketCategory.ROYALTY_PAYMENTS, {
+        authorFirstName: 'Kavita',
+        bookTitle: 'Shadows of the Ghats',
+      });
+
+      expect(snippets.length).toBeGreaterThanOrEqual(2);
+      expect(snippets[0]?.template).toContain('Kavita');
+      expect(snippets[0]?.template).not.toContain('{authorFirstName}');
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -316,13 +539,14 @@ describe('ProviderChain & Circuit Breaker', () => {
     expect(secondary.callCount).toBe(1);
   });
 
-  it('circuit breaker trips OPEN after 5 consecutive failures and resets after cooldown', async () => {
+  it('circuit breaker trips OPEN after 5 consecutive 5xx/timeout/429 failures and resets after cooldown', async () => {
     const mock = new MockProvider();
     const chain = new ProviderChain([mock]);
 
-    // Cause 5 consecutive failures
+    // Cause 5 consecutive 5xx server failures (queue 2 per call to exhaust AI_MAX_RETRIES=1)
     for (let i = 0; i < 5; i++) {
-      mock.queueError(new AiInvalidResponseError('Fail', 400));
+      mock.queueError(new AiProviderError(500, 'Server error'));
+      mock.queueError(new AiProviderError(500, 'Server error retry'));
       await expect(chain.generateJSON({ systemPrompt: 's', userPrompt: 'u' })).rejects.toThrow(AiUnavailableError);
     }
 
@@ -342,11 +566,40 @@ describe('ProviderChain & Circuit Breaker', () => {
     chain.resetCircuitBreaker();
     expect(chain.getCircuitBreakerState().state).toBe('CLOSED');
   });
+
+  it('circuit breaker does NOT count 4xx invalid-request errors toward tripping', async () => {
+    const mock = new MockProvider();
+    const chain = new ProviderChain([mock]);
+
+    // 5 consecutive 4xx invalid request errors (client/schema bug)
+    for (let i = 0; i < 5; i++) {
+      mock.queueError(new AiInvalidResponseError('Bad schema format', 400));
+      await expect(chain.generateJSON({ systemPrompt: 's', userPrompt: 'u' })).rejects.toThrow(AiUnavailableError);
+    }
+
+    // Breaker must still be CLOSED and failures not incremented
+    const state = chain.getCircuitBreakerState();
+    expect(state.state).toBe('CLOSED');
+    expect(state.consecutiveFailures).toBe(0);
+  });
 });
 
 // ---------------------------------------------------------------------------
 // AiService Integration Tests (Database & Domain Events)
 // ---------------------------------------------------------------------------
+
+async function getTestAuthor() {
+  for (let i = 0; i < 5; i++) {
+    try {
+      const a = await prisma.author.findFirst();
+      if (a) return a;
+    } catch {
+      // retry on transient connection resets
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  return await prisma.author.findFirstOrThrow();
+}
 
 describe('AiService Pipeline & Database Integration', () => {
   let mockProvider: MockProvider;
@@ -374,7 +627,7 @@ describe('AiService Pipeline & Database Integration', () => {
       reasoning: 'Author reported ink smudges on novel pages.',
     });
 
-    const author = await prisma.author.findFirstOrThrow();
+    const author = await getTestAuthor();
     const ticket = await prisma.ticket.create({
       data: {
         authorId: author.id,
@@ -425,7 +678,7 @@ describe('AiService Pipeline & Database Integration', () => {
     mockProvider.queueError(new AiProviderError(500, 'Primary API Down'));
     mockProvider.queueError(new AiProviderError(500, 'Primary API Down'));
 
-    const author = await prisma.author.findFirstOrThrow();
+    const author = await getTestAuthor();
     const ticket = await prisma.ticket.create({
       data: {
         authorId: author.id,
@@ -464,7 +717,7 @@ describe('AiService Pipeline & Database Integration', () => {
       reasoning: 'Classified as printing quality',
     });
 
-    const author = await prisma.author.findFirstOrThrow();
+    const author = await getTestAuthor();
     const ticket = await prisma.ticket.create({
       data: {
         authorId: author.id,
@@ -495,7 +748,7 @@ describe('AiService Pipeline & Database Integration', () => {
     (env as { AI_ENABLED: boolean }).AI_ENABLED = false;
 
     try {
-      const author = await prisma.author.findFirstOrThrow();
+      const author = await getTestAuthor();
       const ticket = await prisma.ticket.create({
         data: {
           authorId: author.id,
@@ -525,15 +778,40 @@ describe('AiService Pipeline & Database Integration', () => {
 // HTTP Endpoints (Admin Reclassify & AI Usage)
 // ---------------------------------------------------------------------------
 
+async function getTestUsers() {
+  for (let i = 0; i < 5; i++) {
+    try {
+      const adminUser = await prisma.user.findFirst({ where: { role: 'ADMIN' } });
+      const authorUser = await prisma.user.findFirst({ where: { role: 'AUTHOR' } });
+      if (adminUser && authorUser) return { adminUser, authorUser };
+    } catch {
+      // transient connection reset retry
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  const adminUser = await prisma.user.findFirstOrThrow({ where: { role: 'ADMIN' } });
+  const authorUser = await prisma.user.findFirstOrThrow({ where: { role: 'AUTHOR' } });
+  return { adminUser, authorUser };
+}
+
 describe('Admin AI Endpoints', () => {
   let adminToken: string;
   let authorToken: string;
+  let authorUserId: string;
+  let originalAiEnabled: boolean;
 
   beforeEach(async () => {
-    const adminUser = await prisma.user.findFirstOrThrow({ where: { role: 'ADMIN' } });
-    const authorUser = await prisma.user.findFirstOrThrow({ where: { role: 'AUTHOR' } });
+    originalAiEnabled = env.AI_ENABLED;
+    (env as { AI_ENABLED: boolean }).AI_ENABLED = true;
+    const { adminUser, authorUser } = await getTestUsers();
+    authorUserId = authorUser.id;
     adminToken = signAccessToken({ id: adminUser.id, role: 'ADMIN', authorId: null });
     authorToken = signAccessToken({ id: authorUser.id, role: 'AUTHOR', authorId: authorUser.authorId });
+  });
+
+  afterEach(() => {
+    (env as { AI_ENABLED: boolean }).AI_ENABLED = originalAiEnabled;
+    setProviderChain(null);
   });
 
   describe('POST /api/v1/admin/tickets/:id/reclassify', () => {
@@ -618,6 +896,238 @@ describe('Admin AI Endpoints', () => {
       expect(res.body.totals.calls).toBeGreaterThanOrEqual(1);
       expect(res.body.totals.successRate).toBeGreaterThanOrEqual(0);
       expect(Array.isArray(res.body.byKindAndProvider)).toBe(true);
+      expect(res.body.draftMetrics).toBeDefined();
+      expect(typeof res.body.draftMetrics.draftsGenerated).toBe('number');
+      expect(typeof res.body.draftMetrics.repliesFromDrafts).toBe('number');
+    });
+  });
+
+  describe('Admin AI Draft Reply Endpoints (Phase 8B)', () => {
+    it('GET /api/v1/admin/tickets/:id/draft returns 401 when no token provided', async () => {
+      const res = await request(createApp()).get('/api/v1/admin/tickets/seed-ticket-1001/draft');
+      expect(res.status).toBe(401);
+    });
+
+    it('GET /api/v1/admin/tickets/:id/draft returns 403 when called by an author', async () => {
+      const res = await request(createApp())
+        .get('/api/v1/admin/tickets/seed-ticket-1001/draft')
+        .set('Authorization', `Bearer ${authorToken}`);
+      expect(res.status).toBe(403);
+    });
+
+    it('GET /api/v1/admin/tickets/:id/draft generates, caches, and returns draft on demand', async () => {
+      const mock = new MockProvider();
+      const mockText = `Hi Ananya,\n\nWe have looked into your royalty payout records. Payouts for published books are disbursed within 45 days following the calendar quarter end.\n\nWarm regards,\nBookLeaf Author Support Team`;
+      mock.queueResponse(mockText, mockText, 100, 40);
+      setProviderChain(new ProviderChain([mock]));
+
+      const ticket = await prisma.ticket.findFirstOrThrow({
+        where: { id: 'seed-ticket-1001' },
+      });
+      await prisma.aiDraft.deleteMany({ where: { ticketId: ticket.id } });
+
+      // First call: generates draft
+      const res1 = await request(createApp())
+        .get(`/api/v1/admin/tickets/${ticket.id}/draft`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res1.status).toBe(200);
+      expect(res1.body.status).toBe('ready');
+      expect(res1.body.draft).toBeDefined();
+      expect(res1.body.draft.body).toContain('Hi Ananya,');
+      expect(res1.body.draft.body).toContain('BookLeaf Author Support Team');
+      expect(res1.body.draft.stale).toBe(false);
+      expect(mock.callCount).toBe(1);
+
+      // Verify draft saved in database
+      const savedDraft = await prisma.aiDraft.findUnique({
+        where: { id: res1.body.draft.id },
+      });
+      expect(savedDraft).not.toBeNull();
+
+      // Second call: returns cached draft without calling LLM
+      const res2 = await request(createApp())
+        .get(`/api/v1/admin/tickets/${ticket.id}/draft`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res2.status).toBe(200);
+      expect(res2.body.status).toBe('ready');
+      expect(res2.body.draft.id).toBe(res1.body.draft.id);
+      expect(mock.callCount).toBe(1); // No new LLM call
+    });
+
+    it('regenerates draft when an author message arrives after draft creation', async () => {
+      const mock = new MockProvider();
+      const mockText1 = `Hi Ananya,\n\nFirst draft reply.\n\nWarm regards,\nBookLeaf Author Support Team`;
+      const mockText2 = `Hi Ananya,\n\nSecond regenerated draft reply taking into account your update.\n\nWarm regards,\nBookLeaf Author Support Team`;
+      mock.queueResponse(mockText1, mockText1);
+      mock.queueResponse(mockText2, mockText2);
+      setProviderChain(new ProviderChain([mock]));
+
+      const ticket = await prisma.ticket.findFirstOrThrow({
+        where: { id: 'seed-ticket-1001' },
+      });
+      // Clear prior drafts for clean state
+      await prisma.aiDraft.deleteMany({ where: { ticketId: ticket.id } });
+
+      // 1. Initial draft
+      const res1 = await request(createApp())
+        .get(`/api/v1/admin/tickets/${ticket.id}/draft`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res1.status).toBe(200);
+      expect(res1.body.draft.body).toContain('First draft');
+
+      // 2. Author sends a new message
+      await prisma.ticketMessage.create({
+        data: {
+          ticketId: ticket.id,
+          senderId: authorUserId,
+          type: 'AUTHOR_MESSAGE',
+          body: 'Also, my bank IFSC code was updated yesterday.',
+          createdAt: new Date(Date.now() + 1000),
+        },
+      });
+
+      // 3. Next GET /draft detects stale draft and regenerates
+      const res2 = await request(createApp())
+        .get(`/api/v1/admin/tickets/${ticket.id}/draft`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res2.status).toBe(200);
+      expect(res2.body.draft.body).toContain('Second regenerated draft');
+      expect(mock.callCount).toBe(2);
+    });
+
+    it('POST /api/v1/admin/tickets/:id/draft/regenerate forces a new draft', async () => {
+      const mock = new MockProvider();
+      const text1 = `Hi Kavita,\n\nOriginal draft.\n\nWarm regards,\nBookLeaf Author Support Team`;
+      const text2 = `Hi Kavita,\n\nForced regeneration draft.\n\nWarm regards,\nBookLeaf Author Support Team`;
+      mock.queueResponse(text1, text1);
+      mock.queueResponse(text2, text2);
+      setProviderChain(new ProviderChain([mock]));
+
+      const ticket = await prisma.ticket.findFirstOrThrow({
+        where: { id: 'seed-ticket-1002' },
+      });
+      await prisma.aiDraft.deleteMany({ where: { ticketId: ticket.id } });
+
+      // GET initial draft
+      await request(createApp())
+        .get(`/api/v1/admin/tickets/${ticket.id}/draft`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      // POST /draft/regenerate
+      const regenRes = await request(createApp())
+        .post(`/api/v1/admin/tickets/${ticket.id}/draft/regenerate`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(regenRes.status).toBe(200);
+      expect(regenRes.body.draft.body).toContain('Forced regeneration draft');
+      expect(mock.callCount).toBe(2);
+    });
+
+    it('deduplicates in-flight draft generation calls for the same ticket', async () => {
+      const mock = new MockProvider();
+      const text = `Hi Priya,\n\nSingle generated draft response.\n\nWarm regards,\nBookLeaf Author Support Team`;
+      mock.queueResponse(text, text);
+      setProviderChain(new ProviderChain([mock]));
+
+      const ticket = await prisma.ticket.findFirstOrThrow({
+        where: { id: 'seed-ticket-1003' },
+      });
+
+      // Fire 2 concurrent requests
+      const app = createApp();
+      const [res1, res2] = await Promise.all([
+        request(app)
+          .post(`/api/v1/admin/tickets/${ticket.id}/draft/regenerate`)
+          .set('Authorization', `Bearer ${adminToken}`),
+        request(app)
+          .post(`/api/v1/admin/tickets/${ticket.id}/draft/regenerate`)
+          .set('Authorization', `Bearer ${adminToken}`),
+      ]);
+
+      expect(res1.status).toBe(200);
+      expect(res2.status).toBe(200);
+      expect(res1.body.draft.id).toBe(res2.body.draft.id);
+      expect(mock.callCount).toBe(1); // Deduplication prevented redundant call
+    });
+
+    it('returns 200 with status unavailable and canned snippets when AI fails', async () => {
+      const mock = new MockProvider();
+      mock.queueError(new AiTimeoutError('LLM connection timed out'));
+      mock.queueError(new AiTimeoutError('LLM connection timed out'));
+      setProviderChain(new ProviderChain([mock]));
+
+      const ticket = await prisma.ticket.findFirstOrThrow({
+        where: { id: 'seed-ticket-1004' },
+      });
+
+      const res = await request(createApp())
+        .post(`/api/v1/admin/tickets/${ticket.id}/draft/regenerate`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('unavailable');
+      expect(res.body.draft).toBeNull();
+      expect(res.body.reason).toContain('unavailable');
+      expect(Array.isArray(res.body.snippets)).toBe(true);
+      expect(res.body.snippets.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('POST /api/v1/admin/tickets/:id/reply sets editedFromDraft correctly', async () => {
+      const draftBody = `Hi Priya,\n\nStandard draft response text.\n\nWarm regards,\nBookLeaf Author Support Team`;
+      const ticket = await prisma.ticket.findFirstOrThrow({
+        where: { id: 'seed-ticket-1005' },
+      });
+
+      const draft = await prisma.aiDraft.create({
+        data: {
+          ticketId: ticket.id,
+          body: draftBody,
+          provider: 'mock-gemini',
+          model: 'gemini-2.5-flash-lite',
+          promptVersion: '1.0.0',
+        },
+      });
+
+      // 1. Reply with exact draft body -> editedFromDraft = false
+      const uneditedRes = await request(createApp())
+        .post(`/api/v1/admin/tickets/${ticket.id}/reply`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          body: draftBody,
+          draftId: draft.id,
+        });
+
+      expect(uneditedRes.status).toBe(201);
+      expect(uneditedRes.body.editedFromDraft).toBe(false);
+      expect(uneditedRes.body.message.aiAssisted).toBe(true);
+
+      // 2. Reply with modified body -> editedFromDraft = true
+      const editedRes = await request(createApp())
+        .post(`/api/v1/admin/tickets/${ticket.id}/reply`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          body: `${draftBody}\nPS: We also credited your wallet.`,
+          draftId: draft.id,
+        });
+
+      expect(editedRes.status).toBe(201);
+      expect(editedRes.body.editedFromDraft).toBe(true);
+      expect(editedRes.body.message.aiAssisted).toBe(true);
+
+      // 3. Reply without draftId -> editedFromDraft = false
+      const manualRes = await request(createApp())
+        .post(`/api/v1/admin/tickets/${ticket.id}/reply`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          body: 'Fully manual reply written from scratch.',
+        });
+
+      expect(manualRes.status).toBe(201);
+      expect(manualRes.body.editedFromDraft).toBe(false);
+      expect(manualRes.body.message.aiAssisted).toBe(false);
     });
   });
 

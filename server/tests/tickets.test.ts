@@ -33,10 +33,18 @@ const post = (url: string, who: string, body: unknown) =>
 beforeAll(async () => {
   // Reset seed-ticket-1006 (Priya's ticket) to RESOLVED so the "reopen" test
   // works correctly regardless of prior test runs that may have changed it.
-  await prisma.ticket.update({
-    where: { id: 'seed-ticket-1006' },
-    data: { status: 'RESOLVED', resolvedAt: new Date(Date.now() - 100 * 3_600_000) },
-  });
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    try {
+      await prisma.ticket.update({
+        where: { id: 'seed-ticket-1006' },
+        data: { status: 'RESOLVED', resolvedAt: new Date(Date.now() - 100 * 3_600_000) },
+      });
+      break;
+    } catch {
+      if (attempt === 5) throw new Error('Could not update seed-ticket-1006 after 5 attempts');
+      await new Promise((r) => setTimeout(r, 1000 * attempt));
+    }
+  }
 
   // Serialised to stay within Neon's connection pool limit during parallel test files.
   for (const [key, email, pw] of [

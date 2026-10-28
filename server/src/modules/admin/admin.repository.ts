@@ -136,10 +136,10 @@ export const adminRepository = {
 
   // ---- Validate draft ownership ------------------------------------------
 
-  findDraft(draftId: string, ticketId: string): Promise<{ id: string } | null> {
+  findDraft(draftId: string, ticketId: string): Promise<{ id: string; body: string } | null> {
     return prisma.aiDraft.findFirst({
       where: { id: draftId, ticketId },
-      select: { id: true },
+      select: { id: true, body: true },
     });
   },
 

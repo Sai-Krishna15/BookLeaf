@@ -72,4 +72,18 @@ export const adminController = {
     const report = await getAiUsageReport(days);
     res.status(200).json(report);
   }),
+
+  // GET /admin/tickets/:id/draft
+  getDraft: asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params as unknown as AdminTicketIdParam;
+    const result = await adminService.getDraft(id);
+    res.status(200).json(result);
+  }),
+
+  // POST /admin/tickets/:id/draft/regenerate
+  regenerateDraft: asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params as unknown as AdminTicketIdParam;
+    const result = await adminService.regenerateDraft(id);
+    res.status(200).json(result);
+  }),
 };

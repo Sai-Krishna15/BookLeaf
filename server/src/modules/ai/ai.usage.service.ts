@@ -11,6 +11,13 @@ export interface AiUsageGroup {
   averageLatencyMs: number;
 }
 
+export interface DraftMetrics {
+  draftsGenerated: number;
+  repliesFromDrafts: number;
+  editedReplies: number;
+  editedPercentage: number;
+}
+
 export interface AiUsageReport {
   windowDays: number;
   from: string;
@@ -23,6 +30,7 @@ export interface AiUsageReport {
     outputTokens: number;
     averageLatencyMs: number;
   };
+  draftMetrics: DraftMetrics;
   byKindAndProvider: AiUsageGroup[];
 }
 
@@ -31,21 +39,37 @@ export async function getAiUsageReport(days = 7): Promise<AiUsageReport> {
   const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
   const now = new Date();
 
-  const logs = await prisma.aiCallLog.findMany({
-    where: {
-      createdAt: { gte: since },
-    },
-    select: {
-      kind: true,
-      provider: true,
-      latencyMs: true,
-      inputTokens: true,
-      outputTokens: true,
-      success: true,
-    },
-  });
+  const [logs, draftsGenerated, draftAssistedMessages] = await Promise.all([
+    prisma.aiCallLog.findMany({
+      where: {
+        createdAt: { gte: since },
+      },
+      select: {
+        kind: true,
+        provider: true,
+        latencyMs: true,
+        inputTokens: true,
+        outputTokens: true,
+        success: true,
+      },
+    }),
+    prisma.aiDraft.count({
+      where: { createdAt: { gte: since } },
+    }),
+    prisma.ticketMessage.findMany({
+      where: {
+        aiAssisted: true,
+        draftId: { not: null },
+        createdAt: { gte: since },
+      },
+      select: {
+        body: true,
+        draftId: true,
+      },
+    }),
+  ]);
 
-  // Group by `${kind}:${provider}`
+  // Group logs by `${kind}:${provider}`
   const groupMap = new Map<
     string,
     {
@@ -105,6 +129,29 @@ export async function getAiUsageReport(days = 7): Promise<AiUsageReport> {
     averageLatencyMs: g.calls > 0 ? Math.round(g.totalLatencyMs / g.calls) : 0,
   }));
 
+  // Calculate Draft Telemetry
+  const draftIds = Array.from(new Set(draftAssistedMessages.map((m) => m.draftId!).filter(Boolean)));
+  const drafts =
+    draftIds.length > 0
+      ? await prisma.aiDraft.findMany({
+          where: { id: { in: draftIds } },
+          select: { id: true, body: true },
+        })
+      : [];
+  const draftBodyMap = new Map(drafts.map((d) => [d.id, d.body]));
+
+  let editedReplies = 0;
+  for (const m of draftAssistedMessages) {
+    const originalBody = draftBodyMap.get(m.draftId!);
+    if (originalBody && originalBody.trim() !== m.body.trim()) {
+      editedReplies++;
+    }
+  }
+
+  const repliesFromDrafts = draftAssistedMessages.length;
+  const editedPercentage =
+    repliesFromDrafts > 0 ? Math.round((editedReplies / repliesFromDrafts) * 100) : 0;
+
   return {
     windowDays,
     from: since.toISOString(),
@@ -116,6 +163,12 @@ export async function getAiUsageReport(days = 7): Promise<AiUsageReport> {
       inputTokens: totalInputTokens,
       outputTokens: totalOutputTokens,
       averageLatencyMs: totalCalls > 0 ? Math.round(totalLatency / totalCalls) : 0,
+    },
+    draftMetrics: {
+      draftsGenerated,
+      repliesFromDrafts,
+      editedReplies,
+      editedPercentage,
     },
     byKindAndProvider,
   };

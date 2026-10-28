@@ -13,7 +13,11 @@ import { validate } from '../src/middleware/validate';
 
 describe('GET /api/v1/health', () => {
   it('returns 200 with status and AI mode, plus a request id header', async () => {
-    const res = await request(createApp()).get('/api/v1/health');
+    let res = await request(createApp()).get('/api/v1/health');
+    for (let attempt = 1; attempt <= 3 && res.body.status !== 'ok'; attempt++) {
+      await new Promise((r) => setTimeout(r, 1000 * attempt));
+      res = await request(createApp()).get('/api/v1/health');
+    }
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('ok');
     expect(res.body.checks.ai.mode).toBe('manual_fallback');

@@ -53,6 +53,10 @@ export class ProviderChain {
     };
   }
 
+  isCircuitBreakerOpen(): boolean {
+    return this.getCircuitBreakerState().state === 'OPEN';
+  }
+
   resetCircuitBreaker(): void {
     this.consecutiveFailures = 0;
     this.breakerState = 'CLOSED';
@@ -116,14 +120,19 @@ export class ProviderChain {
     }
 
     // If we reach here, all configured providers failed
-    this.consecutiveFailures++;
-    if (this.consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) {
-      this.breakerState = 'OPEN';
-      this.cooldownUntil = Date.now() + CIRCUIT_BREAKER_COOLDOWN_MS;
-      logger.error(
-        { consecutiveFailures: this.consecutiveFailures, cooldownUntil: new Date(this.cooldownUntil).toISOString() },
-        `AI circuit breaker TRIPPED to OPEN after ${this.consecutiveFailures} consecutive failures`,
-      );
+    // Only count transient/network/5xx/429 failures towards tripping the circuit breaker.
+    // Invalid-request 4xx errors (e.g. schema/prompt bugs) must NOT trip the breaker.
+    const isClientBug = errors.every((e) => e.error instanceof AiInvalidResponseError);
+    if (!isClientBug) {
+      this.consecutiveFailures++;
+      if (this.consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) {
+        this.breakerState = 'OPEN';
+        this.cooldownUntil = Date.now() + CIRCUIT_BREAKER_COOLDOWN_MS;
+        logger.error(
+          { consecutiveFailures: this.consecutiveFailures, cooldownUntil: new Date(this.cooldownUntil).toISOString() },
+          `AI circuit breaker TRIPPED to OPEN after ${this.consecutiveFailures} consecutive failures`,
+        );
+      }
     }
 
     const summary = errors.map((e) => `${e.provider}: ${e.error.message}`).join('; ');

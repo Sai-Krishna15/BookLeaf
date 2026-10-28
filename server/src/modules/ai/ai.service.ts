@@ -15,9 +15,45 @@ import {
 import { parseAndNormalizeClassification } from './ai.schemas';
 import { classifyWithFallback } from './fallback.classifier';
 import { applyPriorityGuardrails } from './priority.guardrails';
+import { buildDraftContext } from './context.builder';
+import {
+  buildDraftSystemPrompt,
+  buildDraftUserPrompt,
+  DRAFT_PROMPT_VERSION,
+} from './prompts/draft.prompt';
+import { validateAndCleanDraft, checkHallucinations } from './draft.validator';
+import { getCannedSnippets, CannedSnippet } from './kb';
+
+export type DraftStatus = 'ready' | 'unavailable';
+
+export interface DraftDetail {
+  id: string;
+  ticketId: string;
+  body: string;
+  warnings: string[];
+  createdAt: Date;
+  provider: string;
+  model: string;
+  stale: boolean;
+}
+
+export interface ReadyDraftResponse {
+  status: 'ready';
+  draft: DraftDetail;
+}
+
+export interface UnavailableDraftResponse {
+  status: 'unavailable';
+  draft: null;
+  reason: string;
+  snippets: CannedSnippet[];
+}
+
+export type DraftResponse = ReadyDraftResponse | UnavailableDraftResponse;
 
 export class AiService {
   private readonly inFlightClassifications = new Set<string>();
+  private readonly inFlightDrafts = new Map<string, Promise<DraftResponse>>();
 
   /**
    * Returns true if a ticket classification is actively running in background.
@@ -273,6 +309,289 @@ export class AiService {
   }
 
   /**
+   * Returns a cached draft reply or generates a new one (PROJECT_CONTEXT §8.3, §8.4, §8.5).
+   *
+   * Caching Rules:
+   * - If a cached draft exists and NO author message was sent after draft.createdAt, returns cached.
+   * - If an author message was sent after draft.createdAt, cached draft is stale -> generates a new one.
+   * - If `force = true` (Regenerate), cache is bypassed and a new draft is generated.
+   *
+   * In-Flight Deduplication:
+   * - Concurrent calls for the same ticket share the identical generation promise.
+   *
+   * Failure Handling:
+   * - Never returns 500. Returns `{ status: 'unavailable', draft: null, snippets }` with 200 OK.
+   */
+  async getOrGenerateDraft(ticketId: string, force = false): Promise<DraftResponse> {
+    const ticket = await prisma.ticket.findUnique({
+      where: { id: ticketId },
+      include: {
+        author: {
+          include: {
+            books: {
+              select: {
+                id: true,
+                status: true,
+                totalRoyaltyEarned: true,
+                royaltyPaid: true,
+                royaltyPending: true,
+              },
+            },
+          },
+        },
+        book: true,
+        messages: {
+          orderBy: { createdAt: 'asc' },
+          take: 10,
+          select: {
+            type: true,
+            body: true,
+            createdAt: true,
+            sender: { select: { name: true } },
+          },
+        },
+      },
+    });
+
+    if (!ticket) {
+      throw new NotFoundError('Ticket not found');
+    }
+
+    // 1. Cache Inspection (when force = false)
+    if (!force) {
+      const latestDraft = await prisma.aiDraft.findFirst({
+        where: { ticketId },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (latestDraft) {
+        const newerAuthorMessage = await prisma.ticketMessage.findFirst({
+          where: {
+            ticketId,
+            type: 'AUTHOR_MESSAGE',
+            createdAt: { gt: latestDraft.createdAt },
+          },
+        });
+
+        if (!newerAuthorMessage) {
+          // Re-evaluate context to inspect for hallucination warnings
+          const authorTotals = this.computeAuthorTotals(ticket.author.books);
+          const context = buildDraftContext({
+            ticket: {
+              id: ticket.id,
+              ticketNumber: ticket.ticketNumber,
+              subject: ticket.subject,
+              description: ticket.description,
+              category: ticket.category,
+              createdAt: ticket.createdAt,
+            },
+            author: {
+              id: ticket.author.id,
+              name: ticket.author.name,
+            },
+            book: ticket.book,
+            authorTotals,
+            messages: ticket.messages.map((m) => ({
+              type: m.type,
+              body: m.body,
+              createdAt: m.createdAt,
+              senderName: m.sender.name,
+            })),
+          });
+
+          const warnings = checkHallucinations(latestDraft.body, context);
+
+          return {
+            status: 'ready',
+            draft: {
+              id: latestDraft.id,
+              ticketId: latestDraft.ticketId,
+              body: latestDraft.body,
+              warnings,
+              createdAt: latestDraft.createdAt,
+              provider: latestDraft.provider,
+              model: latestDraft.model,
+              stale: false,
+            },
+          };
+        }
+      }
+    }
+
+    // 2. In-flight Deduplication
+    const existing = this.inFlightDrafts.get(ticketId);
+    if (existing) {
+      return await existing;
+    }
+
+    const genPromise = this.executeDraftGeneration(ticket);
+    this.inFlightDrafts.set(ticketId, genPromise);
+
+    try {
+      return await genPromise;
+    } finally {
+      this.inFlightDrafts.delete(ticketId);
+    }
+  }
+
+  private async executeDraftGeneration(ticket: {
+    id: string;
+    ticketNumber: number;
+    subject: string;
+    description: string;
+    category: string | null;
+    createdAt: Date;
+    author: {
+      id: string;
+      name: string;
+      books: Array<{ totalRoyaltyEarned: number; royaltyPaid: number; royaltyPending: number }>;
+    };
+    book: any;
+    messages: Array<{ type: string; body: string; createdAt: Date; sender: { name: string } }>;
+  }): Promise<DraftResponse> {
+    const authorFirstName = ticket.author.name.trim().split(/\s+/)[0] || 'Author';
+    const chain = getProviderChain();
+    const hasProviders = chain.getProviders().length > 0;
+    const aiActive = env.AI_ENABLED && hasProviders && !chain.isCircuitBreakerOpen();
+
+    const authorTotals = this.computeAuthorTotals(ticket.author.books);
+    const context = buildDraftContext({
+      ticket: {
+        id: ticket.id,
+        ticketNumber: ticket.ticketNumber,
+        subject: ticket.subject,
+        description: ticket.description,
+        category: ticket.category,
+        createdAt: ticket.createdAt,
+      },
+      author: {
+        id: ticket.author.id,
+        name: ticket.author.name,
+      },
+      book: ticket.book,
+      authorTotals,
+      messages: ticket.messages.map((m) => ({
+        type: m.type,
+        body: m.body,
+        createdAt: m.createdAt,
+        senderName: m.sender.name,
+      })),
+    });
+
+    if (!aiActive) {
+      const snippets = getCannedSnippets(ticket.category as TicketCategory, {
+        authorFirstName,
+        bookTitle: ticket.book?.title,
+      });
+      return {
+        status: 'unavailable',
+        draft: null,
+        reason: 'AI draft generation is currently unavailable. Write your reply manually.',
+        snippets,
+      };
+    }
+
+    const systemPrompt = buildDraftSystemPrompt(context.authorFirstName);
+    const userPrompt = buildDraftUserPrompt(context);
+    const startTime = Date.now();
+    const primaryProviderName = chain.getProviders()[0]?.name ?? 'gemini';
+    const primaryModelName = chain.getProviders()[0]?.model ?? env.GEMINI_MODEL;
+
+    try {
+      const rawResult = await aiQueue.add(() =>
+        chain.generateText({
+          systemPrompt,
+          userPrompt,
+          temperature: 0.3,
+          maxOutputTokens: 350,
+        }),
+      );
+
+      const latencyMs = Date.now() - startTime;
+      await logAiCall({
+        kind: 'DRAFT',
+        provider: primaryProviderName,
+        model: primaryModelName,
+        ticketId: ticket.id,
+        latencyMs,
+        inputTokens: rawResult.inputTokens,
+        outputTokens: rawResult.outputTokens,
+        success: true,
+      });
+
+      const { cleanBody, warnings } = validateAndCleanDraft(rawResult.rawText, context);
+
+      const savedDraft = await prisma.aiDraft.create({
+        data: {
+          ticketId: ticket.id,
+          body: cleanBody,
+          provider: primaryProviderName,
+          model: primaryModelName,
+          promptVersion: DRAFT_PROMPT_VERSION,
+          inputTokens: rawResult.inputTokens ?? null,
+          outputTokens: rawResult.outputTokens ?? null,
+        },
+      });
+
+      return {
+        status: 'ready',
+        draft: {
+          id: savedDraft.id,
+          ticketId: savedDraft.ticketId,
+          body: savedDraft.body,
+          warnings,
+          createdAt: savedDraft.createdAt,
+          provider: savedDraft.provider,
+          model: savedDraft.model,
+          stale: false,
+        },
+      };
+    } catch (err: unknown) {
+      const latencyMs = Date.now() - startTime;
+      const errMessage = err instanceof Error ? err.message : String(err);
+      const errCode = (err as { name?: string }).name ?? 'AI_ERROR';
+
+      logger.error({ ticketId: ticket.id, err: errMessage, errCode }, 'AI draft generation failed');
+
+      await logAiCall({
+        kind: 'DRAFT',
+        provider: primaryProviderName,
+        model: primaryModelName,
+        ticketId: ticket.id,
+        latencyMs,
+        success: false,
+        errorCode: errCode,
+      });
+
+      const snippets = getCannedSnippets(ticket.category as TicketCategory, {
+        authorFirstName: context.authorFirstName,
+        bookTitle: ticket.book?.title,
+      });
+
+      return {
+        status: 'unavailable',
+        draft: null,
+        reason: 'AI draft generation is currently unavailable. Write your reply manually.',
+        snippets,
+      };
+    }
+  }
+
+  private computeAuthorTotals(
+    books: Array<{ totalRoyaltyEarned: number; royaltyPaid: number; royaltyPending: number }>,
+  ) {
+    let totalRoyaltyEarned = 0;
+    let royaltyPaid = 0;
+    let royaltyPending = 0;
+    for (const b of books) {
+      totalRoyaltyEarned += b.totalRoyaltyEarned;
+      royaltyPaid += b.royaltyPaid;
+      royaltyPending += b.royaltyPending;
+    }
+    return { totalRoyaltyEarned, royaltyPaid, royaltyPending };
+  }
+
+  /**
    * Startup recovery: re-queues any tickets stuck in aiStatus PENDING older than 2 minutes
    * (e.g. from an unexpected server restart mid-job).
    */
@@ -324,4 +643,3 @@ export function registerAiDomainListeners(): () => void {
     domainEvents.off('ticket.created', listener);
   };
 }
-

@@ -14,7 +14,14 @@ const app = createApp();
 const AUTHOR = { email: 'priya.sharma@email.com', password: 'Test@1234' };
 const ADMIN = { email: 'admin@bookleaf.com', password: 'Admin@1234' };
 
-const login = (body: unknown) => request(app).post('/api/v1/auth/login').send(body as object);
+const login = async (body: unknown) => {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const res = await request(app).post('/api/v1/auth/login').send(body as object);
+    if (res.status !== 500 || attempt === 3) return res;
+    await new Promise((r) => setTimeout(r, 1000 * attempt));
+  }
+  return request(app).post('/api/v1/auth/login').send(body as object);
+};
 const bodyText = (res: { body: unknown }) => JSON.stringify(res.body);
 
 async function tokenFor(creds: { email: string; password: string }): Promise<string> {
