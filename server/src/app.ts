@@ -13,6 +13,7 @@ import { healthRouter } from './modules/health/health.routes';
 import { authProtectedRouter, authPublicRouter } from './modules/auth/auth.routes';
 import { booksRouter } from './modules/books/books.routes';
 import { ticketsRouter } from './modules/tickets/tickets.routes';
+import { adminRouter } from './modules/admin/admin.routes';
 import { authenticate } from './middleware/authenticate';
 
 export function createApp(): Express {
@@ -57,6 +58,7 @@ export function createApp(): Express {
   app.use(`${API_PREFIX}/auth`, authProtectedRouter); // GET /me
   app.use(`${API_PREFIX}/books`, booksRouter);
   app.use(`${API_PREFIX}/tickets`, ticketsRouter);
+  app.use(`${API_PREFIX}/admin`, adminRouter);
   // Phase 6+: admin router (admin routers also use requireRole('ADMIN')).
 
   app.use(notFound);

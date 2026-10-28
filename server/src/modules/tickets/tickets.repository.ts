@@ -29,7 +29,7 @@ import type { AdminListQuery, AuthorListQuery } from './tickets.schema';
 // ---------------------------------------------------------------------------
 
 /** All ticket columns needed for author and admin DTOs. */
-const TICKET_SELECT = {
+export const TICKET_SELECT = {
   id: true,
   ticketNumber: true,
   authorId: true,
@@ -61,7 +61,7 @@ const TICKET_SELECT = {
 export type TicketRow = Prisma.TicketGetPayload<{ select: typeof TICKET_SELECT }>;
 
 /** Message row for GET /:id/messages */
-const MESSAGE_SELECT = {
+export const MESSAGE_SELECT = {
   id: true,
   ticketId: true,
   senderId: true,

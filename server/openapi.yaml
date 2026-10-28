@@ -390,6 +390,175 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /admin/tickets/{id}:
+    patch:
+      tags: [Admin]
+      summary: Update ticket metadata or assignment
+      description: |
+        ADMIN only. Any subset of `{status, category, priority, assignedToId}`.
+        Reject empty body. Setting same value is no-op.
+        Category/priority change sets corresponding source to ADMIN.
+        Overriding both category and priority clears needsManualTriage.
+      operationId: patchTicket
+      parameters:
+        - $ref: '#/components/parameters/TicketId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchTicketRequest'
+      responses:
+        '200':
+          description: Updated ticket
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTicket'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/tickets/{id}/assign-me:
+    post:
+      tags: [Admin]
+      summary: Assign ticket to calling admin
+      description: |
+        ADMIN only. Idempotent: if already assigned to caller, returns 200 without emitting event.
+        Allows takeover from other admins without changing status.
+      operationId: assignTicketToMe
+      parameters:
+        - $ref: '#/components/parameters/TicketId'
+      responses:
+        '200':
+          description: Updated ticket
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTicket'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/tickets/{id}/notes:
+    post:
+      tags: [Admin]
+      summary: Add internal note to ticket
+      description: |
+        ADMIN only. Creates an INTERNAL_NOTE message visible only to admins.
+        Emits `ticket.note.created` (never `ticket.message.created`).
+      operationId: createInternalNote
+      parameters:
+        - $ref: '#/components/parameters/TicketId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateNoteRequest'
+      responses:
+        '201':
+          description: Internal note created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketMessage'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/tickets/{id}/reply:
+    post:
+      tags: [Admin]
+      summary: Reply to ticket as admin
+      description: |
+        ADMIN only. Sends an ADMIN_REPLY message. If firstResponseAt is null, sets it to now.
+        If ticket is OPEN, moves to IN_PROGRESS. Replying to a CLOSED ticket returns 409.
+        Optional draftId must belong to this ticket and marks aiAssisted=true.
+      operationId: adminReplyTicket
+      parameters:
+        - $ref: '#/components/parameters/TicketId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminReplyRequest'
+      responses:
+        '201':
+          description: Reply sent and ticket updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminReplyResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Ticket is closed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/admins:
+    get:
+      tags: [Admin]
+      summary: List all admin users
+      description: ADMIN only. Returns id and name of all admin users for assignee dropdowns.
+      operationId: listAdmins
+      responses:
+        '200':
+          description: List of admins
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/stats:
+    get:
+      tags: [Admin]
+      summary: Get queue metrics and ticket statistics
+      description: |
+        ADMIN only. Single response with counts computed in the database:
+        byStatus, byPriority (unresolved only), unassigned, overdue, needsManualTriage, avgFirstResponseHours, total.
+      operationId: getAdminStats
+      responses:
+        '200':
+          description: Aggregate stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminStats'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -854,3 +1023,89 @@ components:
               - $ref: '#/components/schemas/AuthorTicket'
               - $ref: '#/components/schemas/AdminTicket'
         meta: { $ref: '#/components/schemas/PaginationMeta' }
+
+    PatchTicketRequest:
+      type: object
+      description: At least one field required.
+      properties:
+        status:
+          $ref: '#/components/schemas/TicketStatus'
+        category:
+          $ref: '#/components/schemas/TicketCategory'
+        priority:
+          $ref: '#/components/schemas/Priority'
+        assignedToId:
+          type: string
+          nullable: true
+          description: User ID of an ADMIN user, or null to unassign.
+
+    CreateNoteRequest:
+      type: object
+      required: [body]
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 5000
+
+    AdminReplyRequest:
+      type: object
+      required: [body]
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 5000
+        draftId:
+          type: string
+          description: Optional AI draft ID linked to this reply.
+
+    AdminReplyResponse:
+      type: object
+      required: [message, ticket]
+      properties:
+        message:
+          $ref: '#/components/schemas/TicketMessage'
+        ticket:
+          $ref: '#/components/schemas/AdminTicket'
+
+    AdminUser:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+
+    AdminStats:
+      type: object
+      required: [total, byStatus, byPriority, unassigned, overdue, needsManualTriage, avgFirstResponseHours]
+      properties:
+        total:
+          type: integer
+        byStatus:
+          type: object
+          required: [OPEN, IN_PROGRESS, RESOLVED, CLOSED]
+          properties:
+            OPEN: { type: integer }
+            IN_PROGRESS: { type: integer }
+            RESOLVED: { type: integer }
+            CLOSED: { type: integer }
+        byPriority:
+          type: object
+          required: [CRITICAL, HIGH, MEDIUM, LOW]
+          properties:
+            CRITICAL: { type: integer }
+            HIGH: { type: integer }
+            MEDIUM: { type: integer }
+            LOW: { type: integer }
+        unassigned:
+          type: integer
+        overdue:
+          type: integer
+        needsManualTriage:
+          type: integer
+        avgFirstResponseHours:
+          type: number
+          nullable: true

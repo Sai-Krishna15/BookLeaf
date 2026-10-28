@@ -18,6 +18,13 @@ const IMPLEMENTED: Array<[string, string]> = [
   ['/tickets/{id}', 'get'],
   ['/tickets/{id}/messages', 'get'],
   ['/tickets/{id}/messages', 'post'],
+  // Phase 6: admin
+  ['/admin/tickets/{id}', 'patch'],
+  ['/admin/tickets/{id}/assign-me', 'post'],
+  ['/admin/tickets/{id}/notes', 'post'],
+  ['/admin/tickets/{id}/reply', 'post'],
+  ['/admin/admins', 'get'],
+  ['/admin/stats', 'get'],
 ];
 
 describe('openapi.yaml', () => {
