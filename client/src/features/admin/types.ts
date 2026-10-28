@@ -8,6 +8,16 @@ import type {
   AiStatus,
 } from '@/features/tickets/types';
 
+export type {
+  AttachmentMeta,
+  FieldSource,
+  Priority,
+  TicketCategory,
+  TicketMessage,
+  TicketStatus,
+  AiStatus,
+};
+
 export interface AdminUser {
   id: string;
   name: string;
@@ -17,24 +27,33 @@ export interface AdminUser {
 export interface AdminTicket {
   id: string;
   ticketNumber: string;
+  ticketNumberRaw?: number;
   authorId: string;
   bookId: string | null;
   subject: string;
   description: string;
   status: TicketStatus;
   category: TicketCategory | null;
+  categorySource: FieldSource | null;
   priority: Priority;
-  categorySource: FieldSource;
-  prioritySource: FieldSource;
+  prioritySource: FieldSource | null;
   aiStatus: AiStatus;
   aiReasoning: string | null;
+  aiError: string | null;
   needsManualTriage: boolean;
   assignedToId: string | null;
+  assignedTo: {
+    id: string;
+    name: string;
+  } | null;
+  attachments?: AttachmentMeta[];
   firstResponseAt: string | null;
   resolvedAt: string | null;
   createdAt: string;
   updatedAt: string;
-  assignedTo: AdminUser | null;
+  ageHours?: number;
+  isOverdue: boolean;
+  messageCount: number;
   author: {
     id: string;
     name: string;
@@ -43,18 +62,44 @@ export interface AdminTicket {
   book: {
     id: string;
     title: string;
-    isbn: string | null;
-    status: string;
+    isbn?: string | null;
+    status?: string;
   } | null;
-  messages: TicketMessage[];
+  messages?: TicketMessage[];
 }
 
 export interface AdminStats {
-  openTickets: number;
-  inProgressTickets: number;
-  unassignedTickets: number;
-  overdueTickets: number;
-  needsTriageTickets: number;
+  total: number;
+  byStatus: {
+    OPEN: number;
+    IN_PROGRESS: number;
+    RESOLVED: number;
+    CLOSED: number;
+  };
+  byPriority: {
+    CRITICAL: number;
+    HIGH: number;
+    MEDIUM: number;
+    LOW: number;
+  };
+  unassigned: number;
+  overdue: number;
+  needsManualTriage: number;
+  avgFirstResponseHours: number | null;
+}
+
+export interface AdminQueueFilters {
+  page?: number;
+  limit?: number;
+  status?: TicketStatus;
+  category?: TicketCategory;
+  priority?: Priority;
+  assignedTo?: string; // 'me' | 'unassigned' | <userId>
+  needsManualTriage?: boolean | 'true' | 'false';
+  from?: string; // YYYY-MM-DD
+  to?: string; // YYYY-MM-DD
+  q?: string;
+  sort?: 'urgency' | 'newest' | 'oldest';
 }
 
 export interface PatchTicketRequest {

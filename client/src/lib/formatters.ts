@@ -85,3 +85,60 @@ export function formatTicketNumber(ticket: string | number | null | undefined): 
   }
   return `BL-${str}`;
 }
+
+/**
+ * Formats duration between createdAt and resolvedAt (or now) into compact string:
+ * e.g., "3d 4h", "5h 20m", "<1m", "4d".
+ */
+export function formatAge(
+  createdAt: string | Date | null | undefined,
+  resolvedAt?: string | Date | null,
+): string {
+  if (!createdAt) return '—';
+  const start = typeof createdAt === 'string' ? new Date(createdAt) : createdAt;
+  if (!isValid(start)) return '—';
+
+  const end = resolvedAt
+    ? typeof resolvedAt === 'string'
+      ? new Date(resolvedAt)
+      : resolvedAt
+    : new Date();
+  if (!isValid(end)) return '—';
+
+  const diffMs = Math.max(0, end.getTime() - start.getTime());
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffDays > 0) {
+    const remHours = diffHours % 24;
+    return remHours > 0 ? `${diffDays}d ${remHours}h` : `${diffDays}d`;
+  }
+  if (diffHours > 0) {
+    const remMins = diffMins % 60;
+    return remMins > 0 ? `${diffHours}h ${remMins}m` : `${diffHours}h`;
+  }
+  if (diffMins > 0) {
+    return `${diffMins}m`;
+  }
+  return '<1m';
+}
+
+/**
+ * Formats average response hours (e.g. 4.2 -> "4.2h", 28 -> "1d 4h", null -> "—").
+ */
+export function formatHours(hours: number | null | undefined): string {
+  if (hours === null || hours === undefined || Number.isNaN(hours)) {
+    return '—';
+  }
+  if (hours < 1) {
+    const mins = Math.round(hours * 60);
+    return mins > 0 ? `${mins}m` : '<1m';
+  }
+  if (hours < 24) {
+    return `${hours.toFixed(1)}h`;
+  }
+  const days = Math.floor(hours / 24);
+  const remHours = Math.round(hours % 24);
+  return remHours > 0 ? `${days}d ${remHours}h` : `${days}d`;
+}

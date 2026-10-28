@@ -1,9 +1,11 @@
 import { api } from '@/lib/api';
 import type {
+  AdminQueueFilters,
   AdminReplyRequest,
   AdminReplyResponse,
   AdminStats,
   AdminTicket,
+  AdminUser,
   CreateNoteRequest,
   DraftResponse,
   PatchTicketRequest,
@@ -13,6 +15,7 @@ import type { TicketListResponse, TicketMessage } from '@/features/tickets/types
 export const adminKeys = {
   all: ['admin'] as const,
   stats: () => [...adminKeys.all, 'stats'] as const,
+  admins: () => [...adminKeys.all, 'admins'] as const,
   tickets: () => [...adminKeys.all, 'tickets'] as const,
   ticketList: (params?: Record<string, unknown>) => [...adminKeys.tickets(), 'list', params] as const,
   ticketDetail: (id: string) => [...adminKeys.tickets(), 'detail', id] as const,
@@ -20,18 +23,27 @@ export const adminKeys = {
 };
 
 export const adminApi = {
-  async getTickets(params?: Record<string, unknown>): Promise<TicketListResponse<AdminTicket>> {
-    const res = await api.get<TicketListResponse<AdminTicket>>('/admin/tickets', { params });
+  /**
+   * Both authors and admins use GET /tickets.
+   * When authenticated as an admin, the server validates admin query filters and returns AdminTicket items.
+   */
+  async getTickets(params?: AdminQueueFilters): Promise<TicketListResponse<AdminTicket>> {
+    const res = await api.get<TicketListResponse<AdminTicket>>('/tickets', { params });
     return res.data;
   },
 
   async getTicket(id: string): Promise<AdminTicket> {
-    const res = await api.get<AdminTicket>(`/admin/tickets/${id}`);
+    const res = await api.get<AdminTicket>(`/tickets/${id}`);
     return res.data;
   },
 
   async getStats(): Promise<AdminStats> {
     const res = await api.get<AdminStats>('/admin/stats');
+    return res.data;
+  },
+
+  async getAdmins(): Promise<AdminUser[]> {
+    const res = await api.get<AdminUser[]>('/admin/admins');
     return res.data;
   },
 

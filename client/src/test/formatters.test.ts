@@ -5,6 +5,8 @@ import {
   formatDateTime,
   relativeTime,
   formatTicketNumber,
+  formatAge,
+  formatHours,
 } from '@/lib/formatters';
 
 describe('Formatters', () => {
@@ -83,6 +85,42 @@ describe('Formatters', () => {
     it('returns fallback for null or undefined', () => {
       expect(formatTicketNumber(null)).toBe('BL-—');
       expect(formatTicketNumber(undefined)).toBe('BL-—');
+    });
+  });
+
+  describe('formatAge', () => {
+    it('formats open duration between createdAt and resolvedAt', () => {
+      const created = '2024-03-01T10:00:00.000Z';
+      const resolved = '2024-03-04T14:00:00.000Z'; // 3d 4h
+      expect(formatAge(created, resolved)).toBe('3d 4h');
+    });
+
+    it('formats open duration under 24 hours', () => {
+      const created = '2024-03-01T10:00:00.000Z';
+      const resolved = '2024-03-01T12:30:00.000Z'; // 2h 30m
+      expect(formatAge(created, resolved)).toBe('2h 30m');
+    });
+
+    it('returns fallback for null or invalid', () => {
+      expect(formatAge(null)).toBe('—');
+      expect(formatAge('invalid-date')).toBe('—');
+    });
+  });
+
+  describe('formatHours', () => {
+    it('formats decimal hours under 24 hours to "X.Xh"', () => {
+      expect(formatHours(4.2)).toBe('4.2h');
+      expect(formatHours(12.0)).toBe('12.0h');
+    });
+
+    it('formats hours over 24 hours into days and hours', () => {
+      expect(formatHours(26)).toBe('1d 2h');
+      expect(formatHours(48)).toBe('2d');
+    });
+
+    it('returns fallback for null or undefined', () => {
+      expect(formatHours(null)).toBe('—');
+      expect(formatHours(undefined)).toBe('—');
     });
   });
 });

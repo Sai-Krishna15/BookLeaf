@@ -15,6 +15,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { LiveIndicator } from '@/components/common/LiveIndicator';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { useAuth } from '@/features/auth/useAuth';
+import { useAdminTicketRealtime } from '@/features/admin/hooks/useAdminTicketRealtime';
 import { cn } from '@/lib/utils';
 
 const adminNavItems = [
@@ -25,6 +26,9 @@ export function AdminLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = React.useState(false);
+
+  // Mount admin realtime listener
+  useAdminTicketRealtime();
 
   const handleLogout = () => {
     logout();
