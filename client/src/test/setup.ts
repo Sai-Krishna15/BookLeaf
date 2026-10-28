@@ -24,4 +24,7 @@ beforeEach(() => {
       dispatchEvent: vi.fn(),
     })),
   });
+
+  // Mock scrollIntoView for jsdom
+  window.HTMLElement.prototype.scrollIntoView = vi.fn();
 });

@@ -1,5 +1,4 @@
 import type { PaginationMeta } from '@/components/common/Pagination';
-import type { Role } from '@/features/auth/types';
 
 export type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
 
@@ -29,42 +28,35 @@ export interface AttachmentMeta {
 export interface TicketMessage {
   id: string;
   ticketId: string;
-  senderId: string;
   type: MessageType;
   body: string;
   aiAssisted: boolean;
-  draftId?: string | null;
-  attachments: AttachmentMeta[];
   createdAt: string;
   sender: {
     id: string;
-    name: string;
-    role: Role;
+    displayName: string;
   };
 }
 
 export interface AuthorTicket {
   id: string;
   ticketNumber: string;
-  authorId: string;
-  bookId: string | null;
+  ticketNumberRaw?: number;
   subject: string;
   description: string;
   status: TicketStatus;
-  createdAt: string;
-  updatedAt: string;
-  resolvedAt: string | null;
   book: {
     id: string;
     title: string;
-    isbn: string | null;
-    status: string;
   } | null;
-  messages: TicketMessage[];
+  attachments: AttachmentMeta[];
+  createdAt: string;
+  updatedAt: string;
+  messages?: TicketMessage[];
 }
 
 export interface TicketListResponse<T = AuthorTicket> {
-  items: T[];
+  data: T[];
   meta: PaginationMeta;
 }
 

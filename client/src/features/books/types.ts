@@ -1,20 +1,7 @@
 import type { PaginationMeta } from '@/components/common/Pagination';
 
-export type BookStatus = 'PUBLISHED' | 'IN_PRODUCTION';
-
-export type ProductionStage =
-  | 'MANUSCRIPT'
-  | 'EDITING'
-  | 'COVER_DESIGN'
-  | 'TYPESETTING'
-  | 'PROOFREADING'
-  | 'ISBN'
-  | 'PRINTING'
-  | 'DISTRIBUTION'
-  | 'LIVE';
-
 export interface StageProgress {
-  stage: ProductionStage;
+  stage: string;
   label: string;
   step: number;
   totalSteps: number;
@@ -23,50 +10,52 @@ export interface StageProgress {
 }
 
 export interface PayoutWindows {
-  currentQuarter: string;
-  nextPayoutDate: string;
-  estimatedWindow: string;
+  lastQuarterEnd: string;
+  lastQuarterPayoutDeadline: string;
+  nextQuarterEnd: string;
+  nextQuarterPayoutDeadline: string;
 }
 
 export interface Book {
   id: string;
   authorId: string;
   title: string;
-  isbn: string | null;
-  genre: string | null;
-  status: BookStatus;
-  publicationDate: string | null;
+  isbn: string; // shown exactly as stored, including XXXX placeholders
+  genre: string;
+  publicationDate: string | null; // YYYY-MM-DD
+  status: string;
   mrp: number | null;
-  copiesSold: number;
-  royaltyPerCopy: number | null;
-  totalRoyaltyEarned: number;
-  totalRoyaltyPaid: number;
-  totalRoyaltyPending: number;
-  lastPayoutDate: string | null;
+  authorRoyaltyPerCopy: number | null;
+  totalCopiesSold: number;
+  totalRoyaltyEarned: number | null;
+  royaltyPaid: number | null;
+  royaltyPending: number | null;
+  lastRoyaltyPayoutDate: string | null; // YYYY-MM-DD
   printPartner: string | null;
-  distributionPlatforms: string[];
-  currentProductionStage: ProductionStage | null;
-  isInProduction: boolean;
-  stageProgress: StageProgress[] | null;
-  payoutWindows: PayoutWindows | null;
+  availableOn: string[];
+  isPublished: boolean;
+  productionStage: {
+    currentStage: string | null;
+    currentStageIndex: number | null;
+    stages: StageProgress[];
+  };
   neverPaid: boolean;
   belowPayoutThreshold: boolean;
-  createdAt: string;
-  updatedAt: string;
+  payoutWindows: PayoutWindows;
 }
 
 export interface BooksSummary {
-  totalBooks: number;
-  publishedBooks: number;
-  inProductionBooks: number;
-  totalCopiesSold: number;
   totalEarned: number;
   totalPaid: number;
   totalPending: number;
-  belowPayoutThreshold: boolean;
+  bookCount: number;
+  publishedCount: number;
+  inProductionCount: number;
+  payoutThreshold: number;
+  pendingBelowThreshold: boolean;
 }
 
 export interface BookListResponse {
-  items: Book[];
+  data: Book[];
   meta: PaginationMeta;
 }

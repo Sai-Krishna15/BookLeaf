@@ -15,6 +15,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { LiveIndicator } from '@/components/common/LiveIndicator';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { useAuth } from '@/features/auth/useAuth';
+import { useAuthorTicketRealtime } from '@/features/tickets/hooks/useAuthorTicketRealtime';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -27,6 +28,9 @@ export function AuthorLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = React.useState(false);
+
+  // Mount realtime subscription for author ticket updates & messages
+  useAuthorTicketRealtime();
 
   const handleLogout = () => {
     logout();

@@ -13,6 +13,7 @@ export const ticketsKeys = {
   list: (params?: Record<string, unknown>) => [...ticketsKeys.lists(), params] as const,
   details: () => [...ticketsKeys.all, 'detail'] as const,
   detail: (id: string) => [...ticketsKeys.details(), id] as const,
+  messages: (id: string) => [...ticketsKeys.detail(id), 'messages'] as const,
 };
 
 export const ticketsApi = {
@@ -20,6 +21,8 @@ export const ticketsApi = {
     status?: string;
     page?: number;
     limit?: number;
+    q?: string;
+    sort?: string;
   }): Promise<TicketListResponse> {
     const res = await api.get<TicketListResponse>('/tickets', { params });
     return res.data;
@@ -27,6 +30,11 @@ export const ticketsApi = {
 
   async getTicket(id: string): Promise<AuthorTicket> {
     const res = await api.get<AuthorTicket>(`/tickets/${id}`);
+    return res.data;
+  },
+
+  async getMessages(id: string): Promise<TicketMessage[]> {
+    const res = await api.get<TicketMessage[]>(`/tickets/${id}/messages`);
     return res.data;
   },
 
