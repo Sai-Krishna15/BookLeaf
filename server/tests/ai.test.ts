@@ -987,6 +987,11 @@ describe('Admin AI Endpoints', () => {
         where: { id: 'seed-ticket-1001' },
       });
       await prisma.aiDraft.deleteMany({ where: { ticketId: ticket.id } });
+      await prisma.ticketMessage.deleteMany({ where: { ticketId: ticket.id } });
+      await prisma.ticket.update({
+        where: { id: ticket.id },
+        data: { category: TicketCategory.ROYALTY_PAYMENTS, status: 'OPEN' },
+      });
 
       // First call: generates draft
       const res1 = await request(createApp())
@@ -1072,6 +1077,11 @@ describe('Admin AI Endpoints', () => {
         where: { id: 'seed-ticket-1001' },
       });
       await prisma.aiDraft.deleteMany({ where: { ticketId: ticket.id } });
+      await prisma.ticketMessage.deleteMany({ where: { ticketId: ticket.id } });
+      await prisma.ticket.update({
+        where: { id: ticket.id },
+        data: { category: TicketCategory.ROYALTY_PAYMENTS, status: 'OPEN' },
+      });
 
       // 1. Initial GET /draft for ROYALTY_PAYMENTS
       const res1 = await request(createApp())

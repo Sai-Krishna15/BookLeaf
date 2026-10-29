@@ -14,7 +14,7 @@
     "dev:client": "npm --prefix client run dev",
     "dev:server": "npm --prefix server run dev",
     "test": "npm --prefix server test",
-    "smoke": "NODE_OPTIONS=\"--dns-result-order=ipv4first\" ./server/node_modules/.bin/tsx scripts/smoke.ts",
+    "smoke": "NODE_PATH=./server/node_modules NODE_OPTIONS=\"--dns-result-order=ipv4first\" ./server/node_modules/.bin/tsx scripts/smoke.ts",
     "print-draft-prompt": "NODE_OPTIONS=\"--dns-result-order=ipv4first\" ./server/node_modules/.bin/tsx scripts/print-draft-prompt.ts"
   },
   "dependencies": {

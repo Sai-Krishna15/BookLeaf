@@ -54,16 +54,16 @@ All accounts are pre-seeded in the database with identical credentials format fo
 #### Author Accounts (All 10 Authors from Sample Dataset)
 | Author Name | Email | Password | Author ID | Key Book / Scenario |
 |---|---|---|---|---|
-| **Amrita Prabhu** | `amrita.prabhu@email.com` | `Test@1234` | `AUTH001` | *Silent Echoes* (Multiple published books) |
-| **Rohan Mehta** | `rohan.mehta@email.com` | `Test@1234` | `AUTH002` | *Beyond the Horizon* |
-| **Priya Sharma** | `priya.sharma@email.com` | `Test@1234` | `AUTH003` | *Whispers in the Wind* (Has resolved ticket with support reply) |
+| **Priya Sharma** | `priya.sharma@email.com` | `Test@1234` | `AUTH001` | *Whispers in the Wind* (Has resolved ticket with support reply) |
+| **Rohit Kapoor** | `rohit.kapoor@email.com` | `Test@1234` | `AUTH002` | *Echoes of Silence* |
+| **Ananya Reddy** | `ananya.reddy@email.com` | `Test@1234` | `AUTH003` | *Between Two Temples* (Zero payout history, overdue royalty case) |
 | **Vikram Joshi** | `vikram.joshi@email.com` | `Test@1234` | `AUTH004` | *Debugging Life* (Printing defect ticket sample) |
-| **Sneha Kulkarni** | `sneha.kulkarni@email.com` | `Test@1234` | `AUTH005` | *Midnight in Mysore* (BK013 in Cover Design stage tracker) |
-| **Kabir Sen** | `kabir.sen@email.com` | `Test@1234` | `AUTH006` | *Echoes of the Valley* |
-| **Ananya Iyer** | `ananya.iyer@email.com` | `Test@1234` | `AUTH007` | *Between Two Temples* (Zero payout history, overdue royalty case) |
-| **Arjun Nair** | `arjun.nair@email.com` | `Test@1234` | `AUTH008` | *Rivers of Mind* |
-| **Kavita Rao** | `kavita.rao@email.com` | `Test@1234` | `AUTH009` | *The Nagpur Notebooks* (₹850 below ₹1,000 threshold; BK015 Typesetting) |
-| **Diya Bannerjee** | `diya.bannerjee@email.com` | `Test@1234` | `AUTH010` | *Durga’s Daughters* (Amazon ISBN mismatch scenario) |
+| **Meera Nair** | `meera.nair@email.com` | `Test@1234` | `AUTH005` | *Coastal Memories* |
+| **Arjun Malhotra** | `arjun.malhotra@email.com` | `Test@1234` | `AUTH006` | *Beyond the Horizon* |
+| **Sneha Kulkarni** | `sneha.kulkarni@email.com` | `Test@1234` | `AUTH007` | *Midnight in Mysore* (BK013 in Cover Design stage tracker) |
+| **Farhan Sheikh** | `farhan.sheikh@email.com` | `Test@1234` | `AUTH008` | *City of Minarets* |
+| **Kavita Deshmukh** | `kavita.deshmukh@email.com` | `Test@1234` | `AUTH009` | *The Nagpur Notebooks* (₹850 below ₹1,000 threshold; BK015 Typesetting) |
+| **Diya Chatterjee** | `diya.chatterjee@email.com` | `Test@1234` | `AUTH010` | *Durga’s Daughters* (Amazon ISBN mismatch scenario) |
 
 ---
 

@@ -86,19 +86,20 @@ async function runSmokeTests() {
     // -------------------------------------------------------------------------
     // Step 2: Author Login
     // -------------------------------------------------------------------------
-    logStep(2, 'Authenticate as seeded author (Amrita Prabhu)');
+    logStep(2, 'Authenticate as seeded author (Priya Sharma)');
     const authorLogin = await requestJson(`${API_URL}/auth/login`, {
       method: 'POST',
       body: JSON.stringify({
-        email: 'amrita.prabhu@email.com',
+        email: 'priya.sharma@email.com',
         password: 'Test@1234',
       }),
     });
-    if (authorLogin.status !== 200 || !authorLogin.data?.data?.token) {
+    authorToken = authorLogin.data?.token || authorLogin.data?.data?.token;
+    const authorUser = authorLogin.data?.user || authorLogin.data?.data?.user;
+    if (authorLogin.status !== 200 || !authorToken) {
       throw new Error(`Author login failed (${authorLogin.status}): ${JSON.stringify(authorLogin.data)}`);
     }
-    authorToken = authorLogin.data.data.token;
-    logSuccess(`Author authenticated — Role: ${authorLogin.data.data.user.role}, Name: ${authorLogin.data.data.user.name}`);
+    logSuccess(`Author authenticated — Role: ${authorUser?.role}, Name: ${authorUser?.name}`);
 
     // -------------------------------------------------------------------------
     // Step 3: Author Book Listing
@@ -107,11 +108,12 @@ async function runSmokeTests() {
     const booksRes = await requestJson(`${API_URL}/books`, {
       headers: { Authorization: `Bearer ${authorToken}` },
     });
-    if (booksRes.status !== 200 || !Array.isArray(booksRes.data?.data) || booksRes.data.data.length === 0) {
+    const booksList = Array.isArray(booksRes.data?.data) ? booksRes.data.data : booksRes.data;
+    if (booksRes.status !== 200 || !Array.isArray(booksList) || booksList.length === 0) {
       throw new Error(`Failed to list books (${booksRes.status}): ${JSON.stringify(booksRes.data)}`);
     }
-    authorBookId = booksRes.data.data[0].id;
-    logSuccess(`Portfolio retrieved — Found ${booksRes.data.data.length} books. Using book "${booksRes.data.data[0].title}" (${authorBookId})`);
+    authorBookId = booksList[0].id;
+    logSuccess(`Portfolio retrieved — Found ${booksList.length} books. Using book "${booksList[0].title}" (${authorBookId})`);
 
     // -------------------------------------------------------------------------
     // Step 4: Socket.IO Handshake
@@ -158,11 +160,12 @@ async function runSmokeTests() {
         description: 'Hello, this is an automated production verification inquiry to confirm end-to-end ticketing.',
       }),
     });
-    if (ticketRes.status !== 201 || !ticketRes.data?.data?.id) {
+    const createdTicket = ticketRes.data?.data || ticketRes.data;
+    if (ticketRes.status !== 201 || !createdTicket?.id) {
       throw new Error(`Ticket creation failed (${ticketRes.status}): ${JSON.stringify(ticketRes.data)}`);
     }
-    testTicketId = ticketRes.data.data.id;
-    const ticketNumber = ticketRes.data.data.ticketNumber;
+    testTicketId = createdTicket.id;
+    const ticketNumber = createdTicket.ticketNumber;
     logSuccess(`Ticket created — ID: ${testTicketId}, Number: BL-${ticketNumber}`);
 
     // -------------------------------------------------------------------------
@@ -176,11 +179,12 @@ async function runSmokeTests() {
         password: 'Admin@1234',
       }),
     });
-    if (adminLogin.status !== 200 || !adminLogin.data?.data?.token) {
+    adminToken = adminLogin.data?.token || adminLogin.data?.data?.token;
+    const adminUser = adminLogin.data?.user || adminLogin.data?.data?.user;
+    if (adminLogin.status !== 200 || !adminToken) {
       throw new Error(`Admin login failed (${adminLogin.status}): ${JSON.stringify(adminLogin.data)}`);
     }
-    adminToken = adminLogin.data.data.token;
-    logSuccess(`Admin authenticated — User: ${adminLogin.data.data.user.email}`);
+    logSuccess(`Admin authenticated — User: ${adminUser?.email}`);
 
     // -------------------------------------------------------------------------
     // Step 7: Admin Queue Verification
@@ -189,14 +193,15 @@ async function runSmokeTests() {
     const queueRes = await requestJson(`${API_URL}/tickets?sort=urgency&limit=20`, {
       headers: { Authorization: `Bearer ${adminToken}` },
     });
-    if (queueRes.status !== 200 || !Array.isArray(queueRes.data?.data)) {
+    const queueList = queueRes.data?.data || queueRes.data;
+    if (queueRes.status !== 200 || !Array.isArray(queueList)) {
       throw new Error(`Failed to fetch admin queue (${queueRes.status}): ${JSON.stringify(queueRes.data)}`);
     }
-    const foundInQueue = queueRes.data.data.some((t: any) => t.id === testTicketId);
+    const foundInQueue = queueList.some((t: any) => t.id === testTicketId);
     if (!foundInQueue) {
       throw new Error(`Newly created ticket ${testTicketId} was not found in admin queue`);
     }
-    logSuccess(`Ticket verified in admin queue (Total queue items: ${queueRes.data.meta.total})`);
+    logSuccess(`Ticket verified in admin queue (Total queue items: ${queueRes.data?.meta?.total ?? queueList.length})`);
 
     // -------------------------------------------------------------------------
     // Step 8: Admin Reply Submission
@@ -208,33 +213,35 @@ async function runSmokeTests() {
       headers: { Authorization: `Bearer ${adminToken}` },
       body: JSON.stringify({ body: replyBody }),
     });
+    const replyData = replyRes.data?.data || replyRes.data;
     if (replyRes.status !== 201) {
       throw new Error(`Admin reply failed (${replyRes.status}): ${JSON.stringify(replyRes.data)}`);
     }
-    logSuccess(`Admin reply dispatched — Status changed to: ${replyRes.data.data.ticket.status}`);
+    logSuccess(`Admin reply dispatched — Status changed to: ${replyData?.ticket?.status}`);
 
     // -------------------------------------------------------------------------
     // Step 9: Author Message Retrieval
     // -------------------------------------------------------------------------
     logStep(9, 'Verify author receives the reply in conversation thread');
-    // Give a brief moment for DB commit & Socket.IO event propagation
     await new Promise((r) => setTimeout(r, 1000));
 
     const messagesRes = await requestJson(`${API_URL}/tickets/${testTicketId}/messages`, {
       headers: { Authorization: `Bearer ${authorToken}` },
     });
-    if (messagesRes.status !== 200 || !Array.isArray(messagesRes.data?.data)) {
+    const messagesList = Array.isArray(messagesRes.data) ? messagesRes.data : messagesRes.data?.data;
+    if (messagesRes.status !== 200 || !Array.isArray(messagesList)) {
       throw new Error(`Failed to fetch ticket messages (${messagesRes.status}): ${JSON.stringify(messagesRes.data)}`);
     }
 
-    const replyMsg = messagesRes.data.data.find((m: any) => m.type === 'ADMIN_REPLY');
+    const replyMsg = messagesList.find((m: any) => m.type === 'ADMIN_REPLY');
     if (!replyMsg) {
       throw new Error('ADMIN_REPLY was not found in author ticket conversation');
     }
-    if (replyMsg.senderName !== 'BookLeaf Support') {
-      throw new Error(`Expected masked senderName "BookLeaf Support", received: "${replyMsg.senderName}"`);
+    const replySenderName = replyMsg.sender?.displayName || replyMsg.senderName;
+    if (replySenderName !== 'BookLeaf Support') {
+      throw new Error(`Expected masked senderName "BookLeaf Support", received: "${replySenderName}"`);
     }
-    logSuccess(`Author verified reply: "${replyMsg.body.slice(0, 50)}..." (Sender correctly masked as "${replyMsg.senderName}")`);
+    logSuccess(`Author verified reply: "${replyMsg.body.slice(0, 50)}..." (Sender correctly masked as "${replySenderName}")`);
 
     // -------------------------------------------------------------------------
     // Step 10: Teardown / Close Test Ticket
