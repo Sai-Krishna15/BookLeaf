@@ -393,6 +393,66 @@ describe('AI Pure Modules', () => {
       expect(ctx.recentMessages.some((m) => m.text.includes('SECRET'))).toBe(false);
       expect(ctx.recentMessages[0]?.text).toContain('[REDACTED_EMAIL]');
     });
+
+    it('builds context with ordered public messages and marks latest author message', () => {
+      const messages = [
+        { type: 'AUTHOR_MESSAGE', body: 'Msg 1 from author', createdAt: new Date('2026-01-01') },
+        { type: 'ADMIN_REPLY', body: 'Reply 1 from staff', createdAt: new Date('2026-01-02') },
+        { type: 'INTERNAL_NOTE', body: 'Internal note to skip', createdAt: new Date('2026-01-03') },
+        { type: 'AUTHOR_MESSAGE', body: 'Msg 2 from author', createdAt: new Date('2026-01-04') },
+        { type: 'ADMIN_REPLY', body: 'Reply 2 from staff', createdAt: new Date('2026-01-05') },
+        { type: 'AUTHOR_MESSAGE', body: 'Latest author question', createdAt: new Date('2026-01-06') },
+      ];
+
+      const ctx = buildDraftContext({
+        ticket: {
+          id: 't-order',
+          subject: 'Order subject',
+          description: 'Original author query from ticket opening',
+          category: TicketCategory.GENERAL_INQUIRY,
+          createdAt: new Date('2026-01-01'),
+        },
+        author: { id: 'a-5', name: 'Vikram Seth' },
+        messages,
+      });
+
+      expect(ctx.originalQuery).toBe('Original author query from ticket opening');
+      expect(ctx.latestAuthorMessage).toBe('Latest author question');
+      expect(ctx.recentMessages).toHaveLength(5); // 5 public messages (internal note skipped)
+      expect(ctx.recentMessages[0]?.from).toBe('Author');
+      expect(ctx.recentMessages[1]?.from).toBe('BookLeaf Support');
+
+      const userPrompt = buildDraftUserPrompt(ctx);
+      expect(userPrompt).toContain('ORIGINAL QUERY:');
+      expect(userPrompt).toContain('RECENT CONVERSATION HISTORY (Most recent public messages, oldest to newest):');
+      expect(userPrompt).toContain('LATEST AUTHOR MESSAGE (reply to this):');
+      expect(userPrompt).toContain('Latest author question');
+    });
+
+    it('token-budget guard truncates longest text first while preserving latest author message', () => {
+      const longDesc = 'A'.repeat(2500);
+      const longMsg = 'B'.repeat(1000);
+      const latestMsg = 'Preserve this crucial author message!';
+
+      const ctx = buildDraftContext({
+        ticket: {
+          id: 't-budget',
+          subject: 'Budget test',
+          description: longDesc,
+          category: TicketCategory.ROYALTY_PAYMENTS,
+          createdAt: new Date(),
+        },
+        author: { id: 'a-6', name: 'Arundhati Roy' },
+        messages: [
+          { type: 'ADMIN_REPLY', body: longMsg, createdAt: new Date('2026-01-01') },
+          { type: 'AUTHOR_MESSAGE', body: latestMsg, createdAt: new Date('2026-01-02') },
+        ],
+      });
+
+      expect(ctx.originalQuery.length).toBeLessThan(1600);
+      expect(ctx.originalQuery).toContain('[truncated]');
+      expect(ctx.latestAuthorMessage).toBe(latestMsg); // Never truncated or dropped!
+    });
   });
 
   describe('Phase 8B: draft.validator', () => {
@@ -796,6 +856,7 @@ async function getTestUsers() {
 
 describe('Admin AI Endpoints', () => {
   let adminToken: string;
+  let adminUserId: string;
   let authorToken: string;
   let authorUserId: string;
   let originalAiEnabled: boolean;
@@ -804,6 +865,7 @@ describe('Admin AI Endpoints', () => {
     originalAiEnabled = env.AI_ENABLED;
     (env as { AI_ENABLED: boolean }).AI_ENABLED = true;
     const { adminUser, authorUser } = await getTestUsers();
+    adminUserId = adminUser.id;
     authorUserId = authorUser.id;
     adminToken = signAccessToken({ id: adminUser.id, role: 'ADMIN', authorId: null });
     authorToken = signAccessToken({ id: authorUser.id, role: 'AUTHOR', authorId: authorUser.authorId });
@@ -996,6 +1058,90 @@ describe('Admin AI Endpoints', () => {
       expect(res2.status).toBe(200);
       expect(res2.body.draft.body).toContain('Second regenerated draft');
       expect(mock.callCount).toBe(2);
+    });
+
+    it('marks draft stale and regenerates when ticket category changes', async () => {
+      const mock = new MockProvider();
+      const text1 = `Hi Priya,\n\nRoyalty draft response.\n\nWarm regards,\nBookLeaf Author Support Team`;
+      const text2 = `Hi Priya,\n\nISBN draft response.\n\nWarm regards,\nBookLeaf Author Support Team`;
+      mock.queueResponse(text1, text1);
+      mock.queueResponse(text2, text2);
+      setProviderChain(new ProviderChain([mock]));
+
+      const ticket = await prisma.ticket.findFirstOrThrow({
+        where: { id: 'seed-ticket-1001' },
+      });
+      await prisma.aiDraft.deleteMany({ where: { ticketId: ticket.id } });
+
+      // 1. Initial GET /draft for ROYALTY_PAYMENTS
+      const res1 = await request(createApp())
+        .get(`/api/v1/admin/tickets/${ticket.id}/draft`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res1.status).toBe(200);
+      expect(res1.body.draft.body).toContain('Royalty draft');
+
+      // 2. Ticket category is updated to ISBN_METADATA
+      await prisma.ticket.update({
+        where: { id: ticket.id },
+        data: { category: TicketCategory.ISBN_METADATA },
+      });
+
+      // 3. Next GET /draft detects category mismatch and regenerates
+      const res2 = await request(createApp())
+        .get(`/api/v1/admin/tickets/${ticket.id}/draft`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res2.status).toBe(200);
+      expect(res2.body.draft.body).toContain('ISBN draft');
+      expect(mock.callCount).toBe(2);
+    });
+
+    it('returns status idle without calling LLM when last public message is a staff reply', async () => {
+      const mock = new MockProvider();
+      setProviderChain(new ProviderChain([mock]));
+
+      const ticket = await prisma.ticket.findFirstOrThrow({
+        where: { id: 'seed-ticket-1002' },
+      });
+      await prisma.aiDraft.deleteMany({ where: { ticketId: ticket.id } });
+
+      // Add staff reply as the latest public message
+      await prisma.ticketMessage.create({
+        data: {
+          ticketId: ticket.id,
+          senderId: adminUserId,
+          type: 'ADMIN_REPLY',
+          body: 'We have updated your records, please review and confirm.',
+          createdAt: new Date(),
+        },
+      });
+
+      // GET /draft should return idle status without calling LLM
+      const idleRes = await request(createApp())
+        .get(`/api/v1/admin/tickets/${ticket.id}/draft`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(idleRes.status).toBe(200);
+      expect(idleRes.body.status).toBe('idle');
+      expect(idleRes.body.reason).toContain("Waiting for the author's reply");
+      expect(mock.callCount).toBe(0); // Zero LLM calls made!
+
+      // Manual regenerate should still work with force = true
+      const forceText = `Hi Kavita,\n\nManual forced draft.\n\nWarm regards,\nBookLeaf Author Support Team`;
+      mock.queueResponse(forceText, forceText);
+
+      const forceRes = await request(createApp())
+        .post(`/api/v1/admin/tickets/${ticket.id}/draft/regenerate`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(forceRes.status).toBe(200);
+      expect(forceRes.body.status).toBe('ready');
+      expect(forceRes.body.draft.body).toContain('Manual forced draft');
+      expect(mock.callCount).toBe(1);
+
+      // Clean up staff reply so subsequent tests on seed-ticket-1002 have author awaiting response
+      await prisma.ticketMessage.deleteMany({
+        where: { ticketId: ticket.id, body: 'We have updated your records, please review and confirm.' },
+      });
     });
 
     it('POST /api/v1/admin/tickets/:id/draft/regenerate forces a new draft', async () => {

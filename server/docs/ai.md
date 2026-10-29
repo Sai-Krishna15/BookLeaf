@@ -199,14 +199,30 @@ AI draft responses emulate an empathetic, experienced BookLeaf author-support re
   ```
 - **Ground Truth Grounding**: Model generates responses solely from injected Book Facts, Author Royalty Totals, and Policy facts. Hallucinating unstated numbers or dates is strictly forbidden.
 
-### 11.3 Context Builder & Deterministic Business Logic (`context.builder.ts`)
+### 11.3 Context Builder & Conversation Architecture (`context.builder.ts`)
+- **Ordered Context Pipeline**:
+  1. **Original Query**: `ticket.description` (the root query that opened the ticket, not a `TicketMessage` row), scrubbed of PII and truncated to ~1,500 characters.
+  2. **Conversation History**: The last 6 **public messages** (`AUTHOR_MESSAGE` and `ADMIN_REPLY` only; internal notes are strictly excluded), sorted oldest to newest. Each message is labelled `"Author"` or `"BookLeaf Support"`, given an ISO/date timestamp, and truncated to ~600 characters.
+  3. **Explicit Response Anchor**:
+     ```
+     LATEST AUTHOR MESSAGE (reply to this):
+     {newest author message text or original query if no follow-ups}
+     ```
+- **Conversation Continuity Rules**:
+  - System prompt instructs model to respond directly to the latest author message while considering earlier replies.
+  - Model must NOT repeat explanations or status updates already given by BookLeaf Support.
+  - Model must NOT re-introduce BookLeaf or welcome the author anew if conversation is already underway.
+  - Model must NOT re-ask for details the author has already provided.
+- **Token-Budget Guard**:
+  - Automatically truncates longest free-text segments first (e.g. earlier conversation messages or lengthy initial queries) if prompt exceeds budget.
+  - Guarantees the `LATEST AUTHOR MESSAGE` is **never** dropped or truncated away.
 - **Book Facts Injected as Ground Truth**: Title, status, current stage, publication date, copies sold, MRP, royalty per copy, total earned, paid, pending, last payout date, print partner, and platforms.
 - **Deterministic Royalty Hint**:
   - `BELOW_THRESHOLD`: Pending royalty < ₹1,000 (rolls over to next quarter).
   - `POSSIBLY_OVERDUE`: Published, paid = 0, pending $\ge$ ₹1,000, and first quarter-end + 45 days passed. Triggers 48h escalation promise.
   - `WITHIN_CYCLE`: Active processing cycle (quarter end + 45 days).
   - `NOT_APPLICABLE`: Book still in production pipeline.
-- **Privacy & History**: Only the author's first name is provided (no email, phone, or location). Only the last 3 public messages are passed; internal notes are strictly excluded.
+- **Privacy & Safety**: Only the author's first name is provided (no email, phone, or location).
 
 ### 11.4 Validator & Hallucination Guard (`draft.validator.ts`)
 - **Markdown Stripper**: Automatically strips code fences, headings, bold/italics, and bullet marks.
@@ -214,14 +230,20 @@ AI draft responses emulate an empathetic, experienced BookLeaf author-support re
 - **Hallucination Scanner**: Scans generated text for currency amounts (₹), percentages (%), and specific calendar dates. Validates each against allowed policy values (80/20, 45 days, 48h, ₹1,000 threshold) and ground-truth book facts. Any unverified figures are surfaced in `draft.warnings`.
 - **Length Check**: Rejects empty or truncated outputs (< 50 characters) with `AiInvalidResponseError`.
 
-### 11.5 Draft Endpoints & Caching
+### 11.5 Draft Endpoints, Caching & Cost Awareness
 - **`GET /api/v1/admin/tickets/:id/draft`**:
-  - Returns cached draft if no author message has arrived since `draft.createdAt`.
-  - Automatically generates a new draft if no cache exists or if an author message arrived later (marking prior draft stale).
-  - **In-flight Deduplication**: Multiple admins viewing the ticket simultaneously share a single generation request.
-  - **Graceful Fallback**: Returns `200 OK` with `{ status: "unavailable", draft: null, snippets }` when AI is disabled or offline. Never fails with 500.
+  - **Cost Awareness & Idle Detection**: `GET /draft` ONLY auto-generates when the ticket awaits a staff response:
+    - Ticket status is `OPEN` or `IN_PROGRESS`, AND
+    - The last public message is from the author, OR there are no staff replies yet.
+    - If the last public message is a staff reply (`ADMIN_REPLY`), the endpoint returns `{ status: "idle", draft: <latest-draft-or-null>, reason: "Waiting for the author's reply" }` without making any call to the LLM.
+  - **Staleness Invalidation**: A draft is considered stale and re-generated if:
+    - ANY public message (`AUTHOR_MESSAGE` or `ADMIN_REPLY`) was created after `draft.createdAt`, OR
+    - The ticket's `category` no longer matches the draft's `category`.
+  - **Draft Metadata Tracking**: `AiDraft` stores `category TicketCategory?` and `basedOnMessageId String?` to correlate drafts with the specific author message and classification policy in effect.
+  - **In-flight Deduplication**: Multiple admins or concurrent queries for the same ticket share a single generation promise.
+  - **Graceful Fallback**: Returns `200 OK` with `{ status: "unavailable", draft: null, snippets }` when AI is disabled, offline, or failing. Never returns 500.
 - **`POST /api/v1/admin/tickets/:id/draft/regenerate`**:
-  - Bypasses cache to generate a fresh draft.
+  - Bypasses the idle check (`force=true`) and cache to generate a fresh draft manually whenever requested by an admin.
   - Rate-limited to 6 calls per minute.
 - **Reply Telemetry**:
   - `POST /api/v1/admin/tickets/:id/reply` checks if the reply body matches the referenced draft, returning `editedFromDraft: boolean`.

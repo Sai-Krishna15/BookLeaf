@@ -36,6 +36,7 @@ export function useAdminTicketDetailRealtime({
         });
 
         if (data.message.type === 'AUTHOR_MESSAGE') {
+          queryClient.invalidateQueries({ queryKey: adminKeys.draft(ticketId) });
           onNewAuthorMessage?.();
         }
       },

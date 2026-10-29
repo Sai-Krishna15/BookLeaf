@@ -53,7 +53,7 @@ export function mainDatabaseUrl(): string | undefined {
 /** Runs a prisma CLI command against the (already guarded) test database; surfaces stderr as text. */
 function prisma_cli(args: string[], direct: string): void {
   try {
-    execFileSync('npx', ['prisma', ...args], {
+    execFileSync('npx', ['tsx', './node_modules/prisma/build/index.js', ...args], {
       stdio: 'pipe',
       env: { ...process.env, DATABASE_URL: direct, DATABASE_URL_UNPOOLED: direct },
     });

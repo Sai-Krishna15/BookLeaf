@@ -14,6 +14,6 @@ import { env } from '../../config/env';
  */
 export const aiQueue = new PQueue({
   concurrency: 2,
-  intervalCap: env.AI_RPM_LIMIT,
-  interval: 60_000,
+  intervalCap: env.NODE_ENV === 'test' ? 1000 : env.AI_RPM_LIMIT,
+  interval: env.NODE_ENV === 'test' ? 100 : 60_000,
 });

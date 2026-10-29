@@ -107,6 +107,7 @@ interface AiDraftPanelProps {
   isStale: boolean;
   hasUserEdits: boolean;
   hasPendingAiArrival: boolean;
+  isAuthorFollowUp?: boolean;
   onApplyDraft: (draftBody: string) => void;
   onInsertSnippet: (snippetText: string) => void;
   disabled?: boolean;
@@ -120,6 +121,7 @@ export function AiDraftPanel({
   isStale,
   hasUserEdits,
   hasPendingAiArrival,
+  isAuthorFollowUp = false,
   onApplyDraft,
   onInsertSnippet,
   disabled = false,
@@ -138,7 +140,8 @@ export function AiDraftPanel({
   }, [rateLimitSeconds]);
 
   const draft = draftResponse?.draft;
-  const isUnavailable = draftResponse?.status === 'unavailable' || (!isLoading && !draft);
+  const isIdle = draftResponse?.status === 'idle';
+  const isUnavailable = draftResponse?.status === 'unavailable' || (!isLoading && !isIdle && !draft);
   const snippets: CannedSnippet[] =
     draftResponse?.snippets && draftResponse.snippets.length > 0
       ? draftResponse.snippets
@@ -170,7 +173,14 @@ export function AiDraftPanel({
           {isLoading ? (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground animate-pulse">
               <Sparkles className="h-3.5 w-3.5 text-primary animate-spin" />
-              <span>Generating AI draft...</span>
+              <span>Drafting reply for latest message...</span>
+            </div>
+          ) : isIdle ? (
+            <div className="flex items-center gap-1.5">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground border border-border">
+                <Clock className="h-3 w-3" />
+                Waiting on Author
+              </span>
             </div>
           ) : draft ? (
             <div className="flex items-center gap-1.5">
@@ -227,27 +237,78 @@ export function AiDraftPanel({
               ? `Retry in ${rateLimitSeconds}s`
               : regenerateMutation.isPending
                 ? 'Regenerating...'
-                : 'Regenerate Draft'}
+                : isIdle
+                  ? 'Generate draft anyway'
+                  : 'Regenerate Draft'}
           </Button>
         </div>
       </div>
 
-      {/* 2. Pending AI Draft Arrival Banner (When user was already typing) */}
+      {/* 2. Pending AI Draft Arrival Banner */}
       {hasPendingAiArrival && draft && (
-        <div className="flex items-center justify-between p-3 rounded-xl bg-primary/5 text-foreground border border-primary/20 text-xs shadow-xs">
+        <div className="flex items-center justify-between p-3 rounded-xl bg-amber-500/10 text-amber-900 dark:text-amber-200 border border-amber-500/20 text-xs shadow-xs">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary shrink-0" />
-            <span className="font-medium">AI draft has arrived. Click to inspect or insert into composer.</span>
+            <Sparkles className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span className="font-medium">
+              {isAuthorFollowUp
+                ? 'The author sent a new message.'
+                : 'AI draft has arrived. Click to inspect or insert into composer.'}
+            </span>
           </div>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => onApplyDraft(draft.body)}
-            className="h-7 px-2.5 text-xs bg-card hover:bg-primary/10 border-primary/30 text-primary font-medium shadow-xs"
-          >
-            Insert AI Draft
-          </Button>
+          <div className="flex items-center gap-2">
+            {isAuthorFollowUp && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleRegenerateClick}
+                disabled={disabled || regenerateMutation.isPending || isLoading}
+                className="h-7 px-2.5 text-xs bg-card hover:bg-amber-500/10 border-amber-500/30 text-amber-900 dark:text-amber-200 font-medium shadow-xs"
+              >
+                Regenerate draft
+              </Button>
+            )}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => onApplyDraft(draft.body)}
+              className="h-7 px-2.5 text-xs bg-card hover:bg-amber-500/10 border-amber-500/30 text-amber-900 dark:text-amber-200 font-medium shadow-xs"
+            >
+              {isAuthorFollowUp ? 'Replace with new draft' : 'Insert AI Draft'}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* 2b. Idle State Banner */}
+      {isIdle && !isLoading && (
+        <div className="p-3.5 rounded-xl bg-muted/40 text-foreground border border-border text-xs space-y-2 shadow-xs">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              <div className="p-1.5 rounded-lg bg-primary/10 text-primary shrink-0 mt-0.5">
+                <Clock className="h-4 w-4" />
+              </div>
+              <div className="space-y-1">
+                <div className="font-semibold text-foreground text-xs">Waiting for the author's reply</div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {draftResponse?.reason ||
+                    "The last message was sent by BookLeaf support. When the author replies, a fresh AI draft will be generated automatically."}
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleRegenerateClick}
+              disabled={disabled || regenerateMutation.isPending || isLoading}
+              className="h-7 text-xs shrink-0 shadow-xs gap-1"
+            >
+              <Sparkles className="h-3 w-3 text-primary" />
+              Generate draft anyway
+            </Button>
+          </div>
         </div>
       )}
 

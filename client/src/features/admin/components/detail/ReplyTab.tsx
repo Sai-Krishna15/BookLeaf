@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Send, Loader2, RotateCcw, AlertCircle, Info } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -7,6 +8,7 @@ import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { AiDraftPanel } from './AiDraftPanel';
 import { useDraft, useReply } from '../../hooks/useAdminDetail';
 import { usePatchTicket } from '../../hooks/useAdmin';
+import { adminKeys } from '../../admin.api';
 import type { AdminTicket } from '../../types';
 import { ApiError } from '@/lib/api';
 
@@ -18,6 +20,7 @@ interface ReplyTabProps {
 export function ReplyTab({ ticket, isStale = false }: ReplyTabProps) {
   const ticketId = ticket.id;
   const storageKey = `bookleaf_draft_${ticketId}`;
+  const queryClient = useQueryClient();
 
   const { data: draftResponse, isLoading: draftLoading } = useDraft(ticketId);
   const replyMutation = useReply(ticketId);
@@ -26,11 +29,13 @@ export function ReplyTab({ ticket, isStale = false }: ReplyTabProps) {
   const [replyText, setReplyText] = React.useState<string>(() => {
     return sessionStorage.getItem(storageKey) || '';
   });
-  const [initialDraftApplied, setInitialDraftApplied] = React.useState(false);
   const [hasPendingAiArrival, setHasPendingAiArrival] = React.useState(false);
+  const [isAuthorFollowUp, setIsAuthorFollowUp] = React.useState(false);
   const [sendConfirmOpen, setSendConfirmOpen] = React.useState(false);
   const [closedConflictError, setClosedConflictError] = React.useState(false);
 
+  const lastLoadedDraftIdRef = React.useRef<string | null>(null);
+  const lastLoadedDraftBodyRef = React.useRef<string | null>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const isClosed = ticket.status === 'CLOSED';
   const draft = draftResponse?.draft;
@@ -56,24 +61,38 @@ export function ReplyTab({ ticket, isStale = false }: ReplyTabProps) {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [replyText]);
 
-  // Handle auto-prefill when draft loads
+  // Handle auto-prefill and live draft arrival
   React.useEffect(() => {
-    if (draft && !initialDraftApplied) {
-      setInitialDraftApplied(true);
-      // Only prefill if the composer was empty
-      if (!replyText.trim()) {
+    if (!draft) return;
+
+    if (draft.id !== lastLoadedDraftIdRef.current) {
+      const isComposerEmpty = !replyText.trim();
+      const isComposerUnedited =
+        lastLoadedDraftBodyRef.current !== null &&
+        replyText.trim() === lastLoadedDraftBodyRef.current.trim();
+
+      if (isComposerEmpty || isComposerUnedited) {
+        if (lastLoadedDraftIdRef.current !== null) {
+          toast.info('New draft for the latest message');
+        }
         setReplyText(draft.body);
+        setHasPendingAiArrival(false);
+        setIsAuthorFollowUp(false);
+        lastLoadedDraftBodyRef.current = draft.body;
       } else if (replyText.trim() !== draft.body.trim()) {
-        // User typed text before draft arrived: DO NOT overwrite!
+        // User typed or edited text: do not overwrite! Show banner
+        setIsAuthorFollowUp(lastLoadedDraftIdRef.current !== null);
         setHasPendingAiArrival(true);
       }
+      lastLoadedDraftIdRef.current = draft.id;
     }
-  }, [draft, initialDraftApplied, replyText]);
+  }, [draft, replyText]);
 
   const hasUserEdits = Boolean(draft && replyText.trim() !== draft.body.trim());
 
   const handleApplyDraft = (draftBody: string) => {
     setReplyText(draftBody);
+    lastLoadedDraftBodyRef.current = draftBody;
     setHasPendingAiArrival(false);
     toast.info('Applied AI draft to composer');
   };
@@ -120,8 +139,18 @@ export function ReplyTab({ ticket, isStale = false }: ReplyTabProps) {
       // Clear text and storage on success
       setReplyText('');
       sessionStorage.removeItem(storageKey);
+      lastLoadedDraftIdRef.current = null;
+      lastLoadedDraftBodyRef.current = null;
       setHasPendingAiArrival(false);
       setClosedConflictError(false);
+
+      // Transition draft panel to idle state
+      queryClient.setQueryData(adminKeys.draft(ticketId), {
+        status: 'idle',
+        draft: null,
+        reason: "Waiting for the author's reply",
+      });
+      queryClient.invalidateQueries({ queryKey: adminKeys.ticketDetail(ticketId) });
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         setClosedConflictError(true);
@@ -155,6 +184,7 @@ export function ReplyTab({ ticket, isStale = false }: ReplyTabProps) {
         isStale={isStale}
         hasUserEdits={hasUserEdits}
         hasPendingAiArrival={hasPendingAiArrival}
+        isAuthorFollowUp={isAuthorFollowUp}
         onApplyDraft={handleApplyDraft}
         onInsertSnippet={handleInsertSnippet}
         disabled={isClosed || replyMutation.isPending}

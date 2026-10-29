@@ -156,16 +156,18 @@ model TicketMessage {
 }
 
 model AiDraft {
-  id            String   @id @default(cuid())
-  ticketId      String
-  body          String
-  provider      String
-  model         String
-  promptVersion String
-  inputTokens   Int?
-  outputTokens  Int?
-  createdAt     DateTime @default(now())
-  ticket        Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  id               String          @id @default(cuid())
+  ticketId         String
+  category         TicketCategory?
+  basedOnMessageId String?
+  body             String
+  provider         String
+  model            String
+  promptVersion    String
+  inputTokens      Int?
+  outputTokens     Int?
+  createdAt        DateTime        @default(now())
+  ticket           Ticket          @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@index([ticketId, createdAt])
 }

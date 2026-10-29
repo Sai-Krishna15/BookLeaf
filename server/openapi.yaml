@@ -1290,6 +1290,12 @@ components:
       properties:
         id: { type: string }
         ticketId: { type: string }
+        category:
+          $ref: '#/components/schemas/TicketCategory'
+          nullable: true
+        basedOnMessageId:
+          type: string
+          nullable: true
         body: { type: string }
         warnings:
           type: array
@@ -1305,7 +1311,7 @@ components:
       properties:
         status:
           type: string
-          enum: [ready, unavailable]
+          enum: [ready, unavailable, idle]
         draft:
           nullable: true
           allOf:

@@ -138,6 +138,8 @@ export interface CannedSnippet {
 export interface DraftDetail {
   id: string;
   ticketId: string;
+  category?: TicketCategory | null;
+  basedOnMessageId?: string | null;
   body: string;
   warnings: string[];
   createdAt: string;
@@ -147,7 +149,7 @@ export interface DraftDetail {
 }
 
 export interface DraftResponse {
-  status: 'ready' | 'unavailable';
+  status: 'ready' | 'unavailable' | 'idle';
   draft: DraftDetail | null;
   snippets?: CannedSnippet[];
   reason?: string;

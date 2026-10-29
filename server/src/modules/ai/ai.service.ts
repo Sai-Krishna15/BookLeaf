@@ -24,11 +24,13 @@ import {
 import { validateAndCleanDraft, checkHallucinations } from './draft.validator';
 import { getCannedSnippets, CannedSnippet } from './kb';
 
-export type DraftStatus = 'ready' | 'unavailable';
+export type DraftStatus = 'ready' | 'unavailable' | 'idle';
 
 export interface DraftDetail {
   id: string;
   ticketId: string;
+  category?: TicketCategory | null;
+  basedOnMessageId?: string | null;
   body: string;
   warnings: string[];
   createdAt: Date;
@@ -49,7 +51,13 @@ export interface UnavailableDraftResponse {
   snippets: CannedSnippet[];
 }
 
-export type DraftResponse = ReadyDraftResponse | UnavailableDraftResponse;
+export interface IdleDraftResponse {
+  status: 'idle';
+  draft: DraftDetail | null;
+  reason: string;
+}
+
+export type DraftResponse = ReadyDraftResponse | UnavailableDraftResponse | IdleDraftResponse;
 
 export class AiService {
   private readonly inFlightClassifications = new Set<string>();
@@ -323,6 +331,22 @@ export class AiService {
    * - Never returns 500. Returns `{ status: 'unavailable', draft: null, snippets }` with 200 OK.
    */
   async getOrGenerateDraft(ticketId: string, force = false): Promise<DraftResponse> {
+    const existing = this.inFlightDrafts.get(ticketId);
+    if (existing) {
+      return await existing;
+    }
+
+    const task = this.processDraftRequest(ticketId, force);
+    this.inFlightDrafts.set(ticketId, task);
+
+    try {
+      return await task;
+    } finally {
+      this.inFlightDrafts.delete(ticketId);
+    }
+  }
+
+  private async processDraftRequest(ticketId: string, force: boolean): Promise<DraftResponse> {
     const ticket = await prisma.ticket.findUnique({
       where: { id: ticketId },
       include: {
@@ -342,8 +366,8 @@ export class AiService {
         book: true,
         messages: {
           orderBy: { createdAt: 'asc' },
-          take: 10,
           select: {
+            id: true,
             type: true,
             body: true,
             createdAt: true,
@@ -357,81 +381,102 @@ export class AiService {
       throw new NotFoundError('Ticket not found');
     }
 
-    // 1. Cache Inspection (when force = false)
-    if (!force) {
-      const latestDraft = await prisma.aiDraft.findFirst({
-        where: { ticketId },
-        orderBy: { createdAt: 'desc' },
-      });
+    const latestDraft = await prisma.aiDraft.findFirst({
+      where: { ticketId },
+      orderBy: { createdAt: 'desc' },
+    });
 
-      if (latestDraft) {
-        const newerAuthorMessage = await prisma.ticketMessage.findFirst({
-          where: {
-            ticketId,
-            type: 'AUTHOR_MESSAGE',
-            createdAt: { gt: latestDraft.createdAt },
-          },
-        });
+    const publicMessages = ticket.messages.filter(
+      (m) => m.type === 'AUTHOR_MESSAGE' || m.type === 'ADMIN_REPLY',
+    );
+    const lastPublicMessage =
+      publicMessages.length > 0 ? publicMessages[publicMessages.length - 1] : null;
+    const hasStaffReplies = publicMessages.some((m) => m.type === 'ADMIN_REPLY');
+    const isOpenOrInProgress = ticket.status === 'OPEN' || ticket.status === 'IN_PROGRESS';
+    const isStaffResponseNeeded =
+      isOpenOrInProgress && (lastPublicMessage?.type === 'AUTHOR_MESSAGE' || !hasStaffReplies);
 
-        if (!newerAuthorMessage) {
-          // Re-evaluate context to inspect for hallucination warnings
-          const authorTotals = this.computeAuthorTotals(ticket.author.books);
-          const context = buildDraftContext({
-            ticket: {
-              id: ticket.id,
-              ticketNumber: ticket.ticketNumber,
-              subject: ticket.subject,
-              description: ticket.description,
-              category: ticket.category,
-              createdAt: ticket.createdAt,
-            },
-            author: {
-              id: ticket.author.id,
-              name: ticket.author.name,
-            },
-            book: ticket.book,
-            authorTotals,
-            messages: ticket.messages.map((m) => ({
-              type: m.type,
-              body: m.body,
-              createdAt: m.createdAt,
-              senderName: m.sender.name,
-            })),
-          });
-
-          const warnings = checkHallucinations(latestDraft.body, context);
-
-          return {
-            status: 'ready',
-            draft: {
+    // 1. Cost Awareness (Fix 3): If force = false and staff response is NOT needed (e.g. staff just replied),
+    // return idle status without calling the LLM.
+    if (!force && !isStaffResponseNeeded) {
+      return {
+        status: 'idle',
+        draft: latestDraft
+          ? {
               id: latestDraft.id,
               ticketId: latestDraft.ticketId,
+              category: latestDraft.category,
+              basedOnMessageId: latestDraft.basedOnMessageId,
               body: latestDraft.body,
-              warnings,
+              warnings: [],
               createdAt: latestDraft.createdAt,
               provider: latestDraft.provider,
               model: latestDraft.model,
               stale: false,
-            },
-          };
-        }
+            }
+          : null,
+        reason: "Waiting for the author's reply",
+      };
+    }
+
+    // 2. Cache Inspection & Staleness Check (Fix 2: ANY public message after draft OR category change)
+    if (!force && latestDraft) {
+      const hasNewerPublicMessage = publicMessages.some(
+        (m) => m.createdAt.getTime() > latestDraft.createdAt.getTime(),
+      );
+      const isCategoryChanged = Boolean(
+        latestDraft.category && ticket.category && latestDraft.category !== ticket.category,
+      );
+      const isStale = hasNewerPublicMessage || isCategoryChanged;
+
+      if (!isStale) {
+        const authorTotals = this.computeAuthorTotals(ticket.author.books);
+        const context = buildDraftContext({
+          ticket: {
+            id: ticket.id,
+            ticketNumber: ticket.ticketNumber,
+            subject: ticket.subject,
+            description: ticket.description,
+            category: ticket.category,
+            createdAt: ticket.createdAt,
+          },
+          author: {
+            id: ticket.author.id,
+            name: ticket.author.name,
+          },
+          book: ticket.book,
+          authorTotals,
+          messages: ticket.messages.map((m) => ({
+            id: m.id,
+            type: m.type,
+            body: m.body,
+            createdAt: m.createdAt,
+            senderName: m.sender.name,
+          })),
+        });
+
+        const warnings = checkHallucinations(latestDraft.body, context);
+
+        return {
+          status: 'ready',
+          draft: {
+            id: latestDraft.id,
+            ticketId: latestDraft.ticketId,
+            category: latestDraft.category,
+            basedOnMessageId: latestDraft.basedOnMessageId,
+            body: latestDraft.body,
+            warnings,
+            createdAt: latestDraft.createdAt,
+            provider: latestDraft.provider,
+            model: latestDraft.model,
+            stale: false,
+          },
+        };
       }
     }
 
-    // 2. In-flight Deduplication
-    const existing = this.inFlightDrafts.get(ticketId);
-    if (existing) {
-      return await existing;
-    }
-
-    const genPromise = this.executeDraftGeneration(ticket);
-    this.inFlightDrafts.set(ticketId, genPromise);
-
-    try {
-      return await genPromise;
-    } finally {
-      this.inFlightDrafts.delete(ticketId);
-    }
+    // 3. Generate fresh draft via LLM
+    return this.executeDraftGeneration(ticket);
   }
 
   private async executeDraftGeneration(ticket: {
@@ -447,7 +492,7 @@ export class AiService {
       books: Array<{ totalRoyaltyEarned: number; royaltyPaid: number; royaltyPending: number }>;
     };
     book: any;
-    messages: Array<{ type: string; body: string; createdAt: Date; sender: { name: string } }>;
+    messages: Array<{ id?: string; type: string; body: string; createdAt: Date; sender: { name: string } }>;
   }): Promise<DraftResponse> {
     const authorFirstName = ticket.author.name.trim().split(/\s+/)[0] || 'Author';
     const chain = getProviderChain();
@@ -471,6 +516,7 @@ export class AiService {
       book: ticket.book,
       authorTotals,
       messages: ticket.messages.map((m) => ({
+        id: m.id,
         type: m.type,
         body: m.body,
         createdAt: m.createdAt,
@@ -521,9 +567,14 @@ export class AiService {
 
       const { cleanBody, warnings } = validateAndCleanDraft(rawResult.rawText, context);
 
+      const authorMsgs = ticket.messages.filter((m) => m.type === 'AUTHOR_MESSAGE');
+      const latestAuthorMsg = authorMsgs.length > 0 ? authorMsgs[authorMsgs.length - 1] : null;
+
       const savedDraft = await prisma.aiDraft.create({
         data: {
           ticketId: ticket.id,
+          category: (ticket.category as TicketCategory) ?? null,
+          basedOnMessageId: latestAuthorMsg?.id ?? null,
           body: cleanBody,
           provider: primaryProviderName,
           model: primaryModelName,
@@ -538,6 +589,8 @@ export class AiService {
         draft: {
           id: savedDraft.id,
           ticketId: savedDraft.ticketId,
+          category: savedDraft.category,
+          basedOnMessageId: savedDraft.basedOnMessageId,
           body: savedDraft.body,
           warnings,
           createdAt: savedDraft.createdAt,

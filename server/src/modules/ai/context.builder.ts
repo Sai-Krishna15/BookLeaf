@@ -39,6 +39,7 @@ export interface AuthorRoyaltySummary {
 }
 
 export interface ConversationMessage {
+  id?: string;
   from: string;
   text: string;
   date: string;
@@ -53,10 +54,13 @@ export interface DraftContext {
   fewShots: Array<{ authorQuery: string; idealResponse: string }>;
   ticketSubject: string;
   ticketDescription: string;
+  originalQuery: string;
   bookFacts: BookFacts | null;
   authorTotals: AuthorRoyaltySummary | null;
   royaltyHint: RoyaltyHint;
   recentMessages: ConversationMessage[];
+  latestAuthorMessage: string;
+  latestAuthorMessageId: string | null;
 }
 
 export interface BuildDraftContextInput {
@@ -94,6 +98,7 @@ export interface BuildDraftContextInput {
     belowPayoutThreshold?: boolean;
   } | null;
   messages?: Array<{
+    id?: string;
     type: string;
     body: string;
     createdAt: Date;
@@ -227,26 +232,83 @@ export function buildDraftContext(input: BuildDraftContextInput): DraftContext {
 
   const royaltyHint = computeRoyaltyHint(input.book, input.authorTotals, now);
 
-  // Conversation history: ONLY the last 3 PUBLIC messages (never internal notes)
-  const publicMessages = (input.messages ?? [])
-    .filter((m) => m.type !== 'INTERNAL_NOTE')
-    .slice(-3)
-    .map((m) => {
-      const from = m.type === 'ADMIN_REPLY' ? 'BookLeaf Support' : authorFirstName;
-      return {
-        from,
-        text: scrubPii(m.body.trim()),
-        date: toIsoDate(m.createdAt),
-      };
-    });
-
-  // Token Budget Guard: cap free-text to budget
-  let ticketSubject = scrubPii(input.ticket.subject.trim());
-  let ticketDescription = scrubPii(input.ticket.description.trim());
-  const MAX_DESC_CHARS = 2000;
-  if (ticketDescription.length > MAX_DESC_CHARS) {
-    ticketDescription = ticketDescription.slice(0, MAX_DESC_CHARS) + '... [truncated]';
+  // 1. Initial truncation & PII scrubbing of original query (ticket.description)
+  let originalQuery = scrubPii(input.ticket.description.trim());
+  const MAX_ORIGINAL_QUERY_CHARS = 1500;
+  if (originalQuery.length > MAX_ORIGINAL_QUERY_CHARS) {
+    originalQuery = originalQuery.slice(0, MAX_ORIGINAL_QUERY_CHARS) + '... [truncated]';
   }
+
+  // 2. Filter public messages: AUTHOR_MESSAGE and ADMIN_REPLY only (never INTERNAL_NOTE)
+  const allMessages = input.messages ?? [];
+  const publicRawMessages = allMessages.filter(
+    (m) => m.type === 'AUTHOR_MESSAGE' || m.type === 'ADMIN_REPLY',
+  );
+
+  // Last 6 public messages, oldest to newest
+  const last6Public = publicRawMessages.slice(-6);
+
+  // Identify the newest author message (if any follow-up exists)
+  const authorMessages = publicRawMessages.filter((m) => m.type === 'AUTHOR_MESSAGE');
+  const latestAuthorMsg = authorMessages.length > 0 ? authorMessages[authorMessages.length - 1] : null;
+  const latestAuthorMessageId = latestAuthorMsg?.id ?? null;
+  const latestAuthorMessage = latestAuthorMsg
+    ? scrubPii(latestAuthorMsg.body.trim())
+    : originalQuery;
+
+  // Format the last 6 public messages, truncating each to ~600 chars
+  const MAX_MSG_CHARS = 600;
+  const formattedMessages: ConversationMessage[] = last6Public.map((m) => {
+    const from = m.type === 'ADMIN_REPLY' ? 'BookLeaf Support' : 'Author';
+    let text = scrubPii(m.body.trim());
+    if (text.length > MAX_MSG_CHARS) {
+      text = text.slice(0, MAX_MSG_CHARS) + '... [truncated]';
+    }
+    return {
+      id: m.id,
+      from,
+      text,
+      date: m.createdAt instanceof Date ? toIsoDate(m.createdAt) : String(m.createdAt),
+    };
+  });
+
+  // 3. Token-Budget Guard: truncate longest free text first, never drop latest author message
+  const MAX_BUDGET = 6000;
+  while (true) {
+    const currentTotal =
+      originalQuery.length + formattedMessages.reduce((sum, m) => sum + m.text.length, 0);
+    if (currentTotal <= MAX_BUDGET) break;
+
+    // Find the longest free text segment among originalQuery and messages
+    let maxLen = originalQuery.length;
+    let targetIdx = -1; // -1 means originalQuery
+    for (let i = 0; i < formattedMessages.length; i++) {
+      const msg = formattedMessages[i];
+      if (msg && msg.text.length > maxLen) {
+        maxLen = msg.text.length;
+        targetIdx = i;
+      }
+    }
+
+    if (maxLen <= 200) {
+      break;
+    }
+
+    const reduction = Math.min(200, maxLen - 200);
+    if (targetIdx === -1) {
+      originalQuery = originalQuery.slice(0, originalQuery.length - reduction) + '... [truncated]';
+    } else {
+      const msg = formattedMessages[targetIdx];
+      if (msg) {
+        formattedMessages[targetIdx] = {
+          ...msg,
+          text: msg.text.slice(0, msg.text.length - reduction) + '... [truncated]',
+        };
+      }
+    }
+  }
+
+  const ticketSubject = scrubPii(input.ticket.subject.trim());
 
   return {
     authorFirstName,
@@ -256,10 +318,13 @@ export function buildDraftContext(input: BuildDraftContextInput): DraftContext {
     policy: kbData.policy,
     fewShots: kbData.fewShots,
     ticketSubject,
-    ticketDescription,
+    ticketDescription: originalQuery,
+    originalQuery,
     bookFacts,
     authorTotals,
     royaltyHint,
-    recentMessages: publicMessages,
+    recentMessages: formattedMessages,
+    latestAuthorMessage,
+    latestAuthorMessageId,
   };
 }
