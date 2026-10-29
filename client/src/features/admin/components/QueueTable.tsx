@@ -31,6 +31,7 @@ import { SourceMarker } from './SourceMarker';
 import { AgeCell } from './AgeCell';
 import { OverdueIndicator } from './OverdueIndicator';
 import { RowActionsMenu } from './RowActionsMenu';
+import { useUnreadAdminTickets } from '../hooks/useAdminTicketRealtime';
 import type { AdminTicket } from '../types';
 import { formatTicketNumber } from '@/lib/formatters';
 import { Inbox, Search } from 'lucide-react';
@@ -55,6 +56,7 @@ export function QueueTable({
   className,
 }: QueueTableProps) {
   const navigate = useNavigate();
+  const { isTicketUnread } = useUnreadAdminTickets();
 
   const columns = React.useMemo<ColumnDef<AdminTicket>[]>(
     () => [
@@ -73,8 +75,16 @@ export function QueueTable({
         cell: ({ row }) => {
           const t = row.original;
           const isUnassigned = !t.assignedToId && !t.assignedTo;
+          const isUnread = isTicketUnread(t.id);
           return (
             <div className="flex items-center gap-1.5 whitespace-nowrap">
+              {isUnread && (
+                <span
+                  className="h-2 w-2 rounded-full bg-blue-600 dark:bg-blue-400 shrink-0 ring-2 ring-background animate-pulse"
+                  title="New author reply received"
+                  aria-label="New author reply"
+                />
+              )}
               <span
                 className={cn(
                   'font-mono text-xs text-foreground',

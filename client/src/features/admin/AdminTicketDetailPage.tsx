@@ -15,11 +15,18 @@ import { ReplyTab } from './components/detail/ReplyTab';
 import { InternalNotesTab } from './components/detail/InternalNotesTab';
 import { useAdminTicket, useTicketMessages } from './hooks/useAdminDetail';
 import { useAdminTicketDetailRealtime } from './hooks/useAdminTicketDetailRealtime';
+import { markAdminTicketAsRead } from './hooks/useAdminTicketRealtime';
 import { ApiError } from '@/lib/api';
 
 export function AdminTicketDetailPage() {
   const { id } = useParams<{ id: string }>();
   const ticketId = id || '';
+
+  React.useEffect(() => {
+    if (ticketId) {
+      markAdminTicketAsRead(ticketId);
+    }
+  }, [ticketId]);
 
   const {
     data: ticket,
