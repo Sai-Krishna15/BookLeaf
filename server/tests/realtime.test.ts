@@ -379,6 +379,34 @@ describe('Admin Event Delivery', () => {
   it('admin socket receives created, updated, message, note, and ai_ready', async () => {
     const adminSocket = await createClient(adminToken);
 
+    // Create an isolated ticket and messages for event delivery
+    const adminEventTicket = await prisma.ticket.create({
+      data: {
+        authorId: 'AUTH003',
+        subject: 'Admin event delivery test ticket',
+        description: 'Testing realtime event delivery to admin room.',
+        status: 'OPEN',
+      },
+    });
+
+    const adminEventMsg = await prisma.ticketMessage.create({
+      data: {
+        ticketId: adminEventTicket.id,
+        senderId: author1UserId,
+        type: 'AUTHOR_MESSAGE',
+        body: 'Admin event test public author message',
+      },
+    });
+
+    const adminEventNote = await prisma.ticketMessage.create({
+      data: {
+        ticketId: adminEventTicket.id,
+        senderId: adminId,
+        type: 'INTERNAL_NOTE',
+        body: 'Admin event test staff internal note',
+      },
+    });
+
     const createdPromise = onceEvent(adminSocket, 'ticket:created');
     const updatedPromise = onceEvent(adminSocket, 'ticket:updated');
     const messagePromise = onceEvent(adminSocket, 'ticket:message');
@@ -387,35 +415,35 @@ describe('Admin Event Delivery', () => {
 
     // 1. ticket.created
     domainEvents.emit('ticket.created', {
-      ticketId: 'seed-ticket-1001',
-      ticketNumber: 1001,
+      ticketId: adminEventTicket.id,
+      ticketNumber: adminEventTicket.ticketNumberRaw,
       authorId: 'AUTH003',
     });
 
     // 2. ticket.updated
     domainEvents.emit('ticket.updated', {
-      ticketId: 'seed-ticket-1001',
+      ticketId: adminEventTicket.id,
       priority: 'HIGH',
     });
 
     // 3. ticket.message.created
     domainEvents.emit('ticket.message.created', {
-      ticketId: 'seed-ticket-1001',
-      messageId: 'seed-msg-1001-1',
+      ticketId: adminEventTicket.id,
+      messageId: adminEventMsg.id,
       type: 'AUTHOR_MESSAGE',
       senderId: author1UserId,
     });
 
     // 4. ticket.note.created
     domainEvents.emit('ticket.note.created', {
-      ticketId: 'seed-ticket-1001',
-      messageId: 'seed-msg-1001-1',
+      ticketId: adminEventTicket.id,
+      messageId: adminEventNote.id,
       senderId: adminId,
     });
 
     // 5. ticket.ai.ready
     domainEvents.emit('ticket.ai.ready', {
-      ticketId: 'seed-ticket-1001',
+      ticketId: adminEventTicket.id,
       category: 'ROYALTY_PAYMENTS',
       priority: 'HIGH',
       aiStatus: 'DONE',
