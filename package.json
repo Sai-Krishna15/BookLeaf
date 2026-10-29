@@ -6,8 +6,15 @@
     "build": "npm --prefix client run build && npm --prefix server run build",
     "build:client": "npm --prefix client run build",
     "build:server": "npm --prefix server run build",
+    "start": "npm --prefix server run db:deploy && npm --prefix server run start",
+    "db:migrate": "npm --prefix server run db:migrate",
+    "db:deploy": "npm --prefix server run db:deploy",
+    "db:seed": "npm --prefix server run db:seed",
+    "dev": "concurrently \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
     "dev:client": "npm --prefix client run dev",
     "dev:server": "npm --prefix server run dev",
+    "test": "npm --prefix server test",
+    "smoke": "NODE_OPTIONS=\"--dns-result-order=ipv4first\" ./server/node_modules/.bin/tsx scripts/smoke.ts",
     "print-draft-prompt": "NODE_OPTIONS=\"--dns-result-order=ipv4first\" ./server/node_modules/.bin/tsx scripts/print-draft-prompt.ts"
   },
   "dependencies": {

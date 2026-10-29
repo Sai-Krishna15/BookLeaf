@@ -1,0 +1,46 @@
+# Render Blueprint Specification for BookLeaf Support Portal
+# Reference: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: bookleaf-support-portal
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm run build
+    startCommand: npm run start
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: API_PREFIX
+        value: /api/v1
+      - key: CLIENT_ORIGIN
+        sync: false # Set to your deployed Render URL (e.g. https://bookleaf-support-portal.onrender.com)
+      - key: DATABASE_URL
+        sync: false # Set to your Neon Serverless pooled connection string
+      - key: DATABASE_URL_UNPOOLED
+        sync: false # Set to your Neon Serverless direct/unpooled connection string for migrations
+      - key: JWT_SECRET
+        generateValue: true # Render automatically generates a cryptographically secure random string
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: AI_ENABLED
+        value: "true"
+      - key: PRIMARY_AI_PROVIDER
+        value: gemini
+      - key: GEMINI_API_KEY
+        sync: false # Set to your Google Gemini API key
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash-lite
+      - key: GROQ_API_KEY
+        sync: false # Optional: Set to your Groq API key for secondary fallback
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: AI_TIMEOUT_MS
+        value: 10000
+      - key: AI_RPM_LIMIT
+        value: 15
