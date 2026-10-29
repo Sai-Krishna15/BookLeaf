@@ -1,28 +1,38 @@
 openapi: 3.0.3
 info:
   title: BookLeaf Author Support & Communication Portal API
-  version: 0.5.0
+  version: 1.0.0
   description: |
-    REST API for the BookLeaf author portal and admin portal.
+    Production REST API for the BookLeaf author portal and admin portal.
 
-    **Conventions**
-    - All endpoints are under `/api/v1`.
+    ### Interactive Testing in Swagger UI (Login -> Authorize Workflow)
+    1. Scroll down to `POST /auth/login` under the **Auth** section.
+    2. Click **Try it out** and execute with test credentials:
+       - **Admin**: `{"email": "admin@bookleaf.com", "password": "Admin@1234"}`
+       - **Author**: `{"email": "amrita.prabhu@email.com", "password": "Test@1234"}`
+    3. Copy the returned `data.token` string.
+    4. Click the **Authorize** button (top right of page with padlock icon).
+    5. Paste the token into the value field (without `Bearer ` prefix; Swagger UI prepends it).
+    6. Click **Authorize** then **Close**. All protected endpoints are now authorized for interactive testing!
+
+    ### Conventions
+    - All endpoints are mounted under `/api/v1`.
     - Everything except `GET /health` and `POST /auth/login` requires `Authorization: Bearer <jwt>`.
-    - Every error uses the same shape (`ErrorResponse`) and carries a `requestId` that is also sent
-      in the `x-request-id` response header.
+    - Every error uses the standard shape (`ErrorResponse`) and carries a `requestId` that is also sent in the `x-request-id` response header.
     - List endpoints are paginated with `?page=1&limit=20` (limit max 100) and return `{ data, meta }`.
     - Authors only ever see their own data. Another author's resource returns **404**, never 403.
-    - Domain events are emitted in-process after every DB write (Phase 7 wires them to Socket.IO).
-
-    _Admin endpoints arrive in Phase 6._
+    - Domain events are emitted in-process after every DB write and broadcast in real time over Socket.IO.
 servers:
   - url: http://localhost:4000/api/v1
     description: Local development
+  - url: /api/v1
+    description: Relative API root
 tags:
   - name: Health
   - name: Auth
   - name: Books
   - name: Tickets
+  - name: Admin
 
 security:
   - bearerAuth: []
@@ -103,6 +113,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MeResponse'
+              example:
+                user:
+                  id: user_auth001
+                  email: amrita.prabhu@email.com
+                  name: Amrita Prabhu
+                  role: AUTHOR
+                  authorId: AUTH001
+                author:
+                  id: AUTH001
+                  name: Amrita Prabhu
+                  email: amrita.prabhu@email.com
+                  phone: '+91-98450-12345'
+                  city: Bangalore
+                  joinedDate: '2023-01-15T00:00:00.000Z'
         '401':
           $ref: '#/components/responses/Unauthorized'
 
@@ -211,6 +235,10 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateTicketRequest'
+            example:
+              bookId: BK001
+              subject: Clarification on Q3 royalty payout calculation
+              description: My author dashboard shows ₹45,500 total royalty earned but the bank credit received was ₹42,000. Could you please clarify if TDS or withholding was applied?
       responses:
         '201':
           description: Ticket created
@@ -218,6 +246,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthorTicket'
+              example:
+                id: clxtkt10250001
+                ticketNumber: 1025
+                subject: Clarification on Q3 royalty payout calculation
+                description: My author dashboard shows ₹45,500 total royalty earned but the bank credit received was ₹42,000. Could you please clarify if TDS or withholding was applied?
+                status: OPEN
+                bookId: BK001
+                bookTitle: Silent Echoes
+                authorId: AUTH001
+                authorName: Amrita Prabhu
+                createdAt: '2026-10-29T10:00:00.000Z'
+                updatedAt: '2026-10-29T10:00:00.000Z'
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
@@ -372,6 +412,8 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateMessageRequest'
+            example:
+              body: Thank you for checking. I confirm that the bank statement has been reviewed and matches the credit amount.
       responses:
         '201':
           description: Message created
@@ -379,6 +421,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TicketMessage'
+              example:
+                id: msg_clx001
+                ticketId: clxtkt10250001
+                senderId: user_auth001
+                senderName: Amrita Prabhu
+                senderRole: AUTHOR
+                type: AUTHOR_MESSAGE
+                body: Thank you for checking. I confirm that the bank statement has been reviewed and matches the credit amount.
+                createdAt: '2026-10-29T10:15:00.000Z'
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
@@ -412,6 +463,9 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/PatchTicketRequest'
+            example:
+              status: IN_PROGRESS
+              priority: HIGH
       responses:
         '200':
           description: Updated ticket
@@ -419,6 +473,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AdminTicket'
+              example:
+                id: clxtkt10250001
+                ticketNumber: 1025
+                subject: Clarification on Q3 royalty payout calculation
+                description: My author dashboard shows ₹45,500 total royalty earned but the bank credit received was ₹42,000. Could you please clarify if TDS or withholding was applied?
+                status: IN_PROGRESS
+                category: ROYALTY_PAYMENTS
+                categorySource: AI
+                priority: HIGH
+                prioritySource: ADMIN
+                aiStatus: DONE
+                needsManualTriage: false
+                assignedToId: usr_admin01
+                assignedTo:
+                  id: usr_admin01
+                  name: BookLeaf Admin
+                  email: admin@bookleaf.com
+                bookId: BK001
+                bookTitle: Silent Echoes
+                authorId: AUTH001
+                authorName: Amrita Prabhu
+                authorEmail: amrita.prabhu@email.com
+                authorPhone: '+91-98450-12345'
+                authorCity: Bangalore
+                createdAt: '2026-10-29T10:00:00.000Z'
+                updatedAt: '2026-10-29T10:20:00.000Z'
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
@@ -468,6 +548,8 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateNoteRequest'
+            example:
+              body: Finance team confirmed batch payout transaction #TXN99281 settled on the 15th with standard 10% TDS withholding.
       responses:
         '201':
           description: Internal note created
@@ -475,6 +557,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TicketMessage'
+              example:
+                id: msg_note001
+                ticketId: clxtkt10250001
+                senderId: usr_admin01
+                senderName: BookLeaf Admin
+                senderRole: ADMIN
+                type: INTERNAL_NOTE
+                body: Finance team confirmed batch payout transaction #TXN99281 settled on the 15th with standard 10% TDS withholding.
+                createdAt: '2026-10-29T10:22:00.000Z'
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
@@ -501,6 +592,9 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/AdminReplyRequest'
+            example:
+              body: Dear Amrita, thank you for reaching out. The ₹3,500 difference corresponds to 10% TDS withheld as per standard tax guidelines. The Form 16A TDS certificate will be available in your portal next week.
+              draftId: draft_clx101
       responses:
         '201':
           description: Reply sent and ticket updated
@@ -508,6 +602,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AdminReplyResponse'
+              example:
+                message:
+                  id: msg_reply001
+                  ticketId: clxtkt10250001
+                  senderId: usr_admin01
+                  senderName: BookLeaf Support
+                  senderRole: ADMIN
+                  type: ADMIN_REPLY
+                  body: Dear Amrita, thank you for reaching out. The ₹3,500 difference corresponds to 10% TDS withheld as per standard tax guidelines. The Form 16A TDS certificate will be available in your portal next week.
+                  createdAt: '2026-10-29T10:30:00.000Z'
+                ticket:
+                  id: clxtkt10250001
+                  status: IN_PROGRESS
+                  updatedAt: '2026-10-29T10:30:00.000Z'
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':

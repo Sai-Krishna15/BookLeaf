@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../src/app';
 import { ProviderChain } from '../src/modules/ai/provider.chain';
-import type { LLMProvider, LLMRequest, LLMResponse } from '../src/modules/ai/types';
+import type { LLMProvider, LLMRequest, LLMResponse } from '../src/modules/ai/llm.provider';
 import { AiInvalidResponseError, AiUnavailableError } from '../src/modules/ai/llm.provider';
 
 class MockProvider implements LLMProvider {

@@ -4,6 +4,8 @@ import cors from 'cors';
 import express, { type Express } from 'express';
 import helmet from 'helmet';
 import pinoHttp from 'pino-http';
+import swaggerUi from 'swagger-ui-express';
+import YAML from 'yaml';
 import { API_PREFIX, JSON_BODY_LIMIT, REQUEST_ID_HEADER } from './config/constants';
 import { env } from './config/env';
 import { logger } from './config/logger';
@@ -61,6 +63,47 @@ export function createApp(): Express {
     }),
   );
   app.use(express.json({ limit: JSON_BODY_LIMIT }));
+
+  // ---- API DOCUMENTATION (Swagger UI at /api/docs) ----
+  const candidateOpenApiPaths = [
+    path.resolve(__dirname, '../openapi.yaml'),
+    path.resolve(__dirname, '../../openapi.yaml'),
+    path.resolve(process.cwd(), 'server/openapi.yaml'),
+    path.resolve(process.cwd(), 'openapi.yaml'),
+  ];
+  const openapiFilePath = candidateOpenApiPaths.find((p) => fs.existsSync(p));
+  if (openapiFilePath) {
+    const openapiYaml = fs.readFileSync(openapiFilePath, 'utf8');
+    const swaggerDocument = YAML.parse(openapiYaml);
+
+    // Relax helmet CSP specifically for /api/docs to allow Swagger UI inline assets
+    app.use('/api/docs', (req, res, next) => {
+      res.setHeader(
+        'Content-Security-Policy',
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'",
+      );
+      next();
+    });
+
+    app.get('/api/docs/openapi.yaml', (_req, res) => {
+      res.setHeader('Content-Type', 'text/yaml; charset=utf-8');
+      res.send(openapiYaml);
+    });
+
+    app.get('/api/v1/docs', (_req, res) => {
+      res.redirect('/api/docs');
+    });
+
+    app.use(
+      '/api/docs',
+      swaggerUi.serve,
+      swaggerUi.setup(swaggerDocument, {
+        customSiteTitle: 'BookLeaf Support Portal API Documentation',
+        customCss: '.swagger-ui .topbar { display: none }',
+      }),
+    );
+  }
+
   app.use(API_PREFIX, globalRateLimiter);
 
   // ---- PUBLIC routes: the only two that skip authentication (PROJECT_CONTEXT §7) ----
