@@ -32,7 +32,7 @@ export function ProductionStageTracker({
         </div>
 
         {/* 9-step progress bar */}
-        <ol className="flex items-center w-full gap-1 sm:gap-1.5" role="list">
+        <ol className="flex items-center w-full gap-1.5" role="list">
           {stages.map((stage) => {
             const isDone = stage.isComplete;
             const isCurr = stage.isCurrent;
@@ -46,9 +46,9 @@ export function ProductionStageTracker({
                 <div
                   className={cn(
                     'h-1.5 w-full rounded-full transition-all duration-300',
-                    isDone && 'bg-emerald-500',
-                    isCurr && 'bg-primary ring-2 ring-primary/30',
-                    !isDone && !isCurr && 'bg-muted dark:bg-muted/60',
+                    isDone && 'bg-emerald-600 dark:bg-emerald-500',
+                    isCurr && 'bg-primary ring-2 ring-primary/25',
+                    !isDone && !isCurr && 'bg-muted/80 dark:bg-muted/60',
                   )}
                 />
                 <span className="sr-only">
@@ -65,20 +65,20 @@ export function ProductionStageTracker({
             <span
               key={stage.stage}
               className={cn(
-                'inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border',
+                'inline-flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full border shadow-xs transition-colors',
                 stage.isComplete &&
-                  'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800',
+                  'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800',
                 stage.isCurrent &&
                   'bg-primary/10 text-primary border-primary/30 font-semibold ring-1 ring-primary/20',
                 !stage.isComplete &&
                   !stage.isCurrent &&
-                  'bg-muted/40 text-muted-foreground border-border/50 opacity-60',
+                  'bg-muted/50 text-muted-foreground border-border/60 opacity-70',
               )}
             >
               {stage.isComplete ? (
-                <Check className="h-2.5 w-2.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                <Check className="h-2.5 w-2.5 shrink-0 text-emerald-700 dark:text-emerald-400" />
               ) : (
-                <Circle className="h-2 w-2 shrink-0 fill-current opacity-40" />
+                <Circle className="h-1.5 w-1.5 shrink-0 fill-current opacity-40" />
               )}
               <span>{stage.label}</span>
             </span>
@@ -90,7 +90,7 @@ export function ProductionStageTracker({
 
   // Fallback if status is unparseable
   return (
-    <div className={cn('p-3 rounded-lg bg-muted/50 border border-border text-xs', className)}>
+    <div className={cn('p-3 rounded-lg bg-muted/60 border border-border/80 text-xs shadow-xs', className)}>
       <span className="font-semibold text-foreground">Status: </span>
       <span className="text-muted-foreground">{rawStatus || currentStage || 'In Production'}</span>
       <div className="text-[11px] text-muted-foreground mt-1">

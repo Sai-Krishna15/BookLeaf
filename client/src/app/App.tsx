@@ -15,7 +15,7 @@ export function App() {
           <SocketProvider>
             <TooltipProvider delayDuration={300}>
               <RouterProvider router={router} />
-              <Toaster richColors closeButton position="top-right" />
+              <Toaster richColors closeButton position="bottom-right" />
             </TooltipProvider>
           </SocketProvider>
         </AuthProvider>

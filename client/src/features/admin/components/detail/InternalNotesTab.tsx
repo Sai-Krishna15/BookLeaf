@@ -46,10 +46,10 @@ export function InternalNotesTab({ ticket }: InternalNotesTabProps) {
   return (
     <div className="space-y-4">
       {/* Privacy Notice Banner */}
-      <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800 flex items-center gap-2.5 text-xs">
+      <div className="p-3 rounded-xl bg-amber-500/10 text-amber-900 dark:text-amber-200 border border-amber-500/20 flex items-center gap-2.5 text-xs shadow-xs">
         <Lock className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" />
-        <div className="flex-1">
-          <span className="font-semibold">Staff-only notes:</span> These notes are private to the BookLeaf operations team and will never be seen by the author.
+        <div className="flex-1 leading-relaxed">
+          <span className="font-semibold text-foreground">Staff-only notes:</span> These notes are private to the BookLeaf operations team and will never be seen by the author.
         </div>
       </div>
 
@@ -63,11 +63,11 @@ export function InternalNotesTab({ ticket }: InternalNotesTabProps) {
             onKeyDown={handleKeyDown}
             disabled={addNoteMutation.isPending}
             maxLength={5000}
-            className="min-h-[140px] text-sm pr-16 resize-y border-amber-300 dark:border-amber-800/80 focus-visible:ring-amber-500 bg-amber-50/20"
+            className="min-h-[140px] text-sm pr-16 resize-y border-amber-300/80 dark:border-amber-800/80 focus-visible:ring-2 focus-visible:ring-amber-500/30 bg-amber-500/[0.03] shadow-xs leading-relaxed"
             aria-label="Staff internal note composer"
           />
           <span
-            className={`absolute right-3 bottom-2.5 text-[10px] pointer-events-none ${
+            className={`absolute right-3 bottom-2.5 text-[10px] pointer-events-none font-mono ${
               noteText.length > 4800 ? 'text-destructive font-bold' : 'text-muted-foreground'
             }`}
           >
@@ -78,14 +78,14 @@ export function InternalNotesTab({ ticket }: InternalNotesTabProps) {
         {/* Action Bar */}
         <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
           <span className="text-[11px] text-muted-foreground">
-            Press <kbd className="px-1 py-0.5 rounded bg-muted border border-border font-mono text-[10px]">Ctrl</kbd> + <kbd className="px-1 py-0.5 rounded bg-muted border border-border font-mono text-[10px]">Enter</kbd> to add note
+            Press <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border/80 font-mono text-[10px] text-foreground">Ctrl</kbd> + <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border/80 font-mono text-[10px] text-foreground">Enter</kbd> to add note
           </span>
 
           <Button
             type="button"
             onClick={handleSubmit}
             disabled={!noteText.trim() || addNoteMutation.isPending}
-            className="gap-2 text-xs h-8 bg-amber-600 hover:bg-amber-700 text-white dark:bg-amber-700 dark:hover:bg-amber-800"
+            className="gap-2 text-xs h-8 bg-amber-700 hover:bg-amber-800 text-white font-medium shadow-xs"
           >
             {addNoteMutation.isPending ? (
               <>

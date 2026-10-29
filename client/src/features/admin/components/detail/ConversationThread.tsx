@@ -135,7 +135,7 @@ export function ConversationThread({
               return (
                 <div
                   key={msg.id}
-                  className="flex gap-3 py-1 bg-amber-50/60 dark:bg-amber-950/20 p-3.5 rounded-xl border border-amber-200 dark:border-amber-800/60"
+                  className="flex gap-3 py-1 bg-amber-500/[0.06] dark:bg-amber-950/20 p-3.5 rounded-xl border border-amber-500/20 shadow-xs"
                 >
                   <Avatar className="h-8 w-8 shrink-0">
                     <AvatarFallback className="bg-amber-200 text-amber-900 dark:bg-amber-900 dark:text-amber-100 text-xs font-semibold">
@@ -152,7 +152,7 @@ export function ConversationThread({
                         <Lock className="h-2.5 w-2.5" />
                         Internal note — not visible to the author
                       </span>
-                      <span className="text-[11px] text-amber-800/80 dark:text-amber-400 ml-auto">
+                      <span className="text-[11px] text-amber-800/80 dark:text-amber-400 ml-auto font-mono">
                         {formatDateTime(msg.createdAt)}
                       </span>
                     </div>
@@ -173,7 +173,7 @@ export function ConversationThread({
                       'text-xs font-semibold',
                       isAuthor
                         ? 'bg-primary/10 text-primary border border-primary/20'
-                        : 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 border border-slate-700',
+                        : 'bg-primary text-primary-foreground border border-primary/40',
                     )}
                   >
                     {isAuthor ? <User className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
@@ -186,27 +186,27 @@ export function ConversationThread({
                       {isAuthor ? msg.sender.displayName || ticket.author.name : msg.sender.displayName || 'BookLeaf Support'}
                     </span>
                     {isAdmin && (
-                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
                         Staff Response
                       </span>
                     )}
                     {msg.aiAssisted && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                        <Sparkles className="h-2.5 w-2.5 text-purple-600 dark:text-purple-400" />
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-primary/5 text-primary border border-primary/20">
+                        <Sparkles className="h-2.5 w-2.5 text-primary" />
                         AI assisted
                       </span>
                     )}
-                    <span className="text-[11px] text-muted-foreground ml-auto">
+                    <span className="text-[11px] text-muted-foreground ml-auto font-mono">
                       {formatDateTime(msg.createdAt)}
                     </span>
                   </div>
 
                   <div
                     className={cn(
-                      'p-4 rounded-xl border text-sm leading-relaxed shadow-sm whitespace-pre-wrap break-words',
+                      'p-4 rounded-xl border text-sm leading-relaxed shadow-xs whitespace-pre-wrap break-words',
                       isAuthor
                         ? 'bg-card border-border text-foreground'
-                        : 'bg-slate-50 dark:bg-slate-900/60 border-primary/20 text-foreground ring-1 ring-primary/10',
+                        : 'bg-primary/[0.03] border-primary/25 text-foreground',
                     )}
                   >
                     {msg.body}

@@ -162,7 +162,7 @@ export function ReplyTab({ ticket, isStale = false }: ReplyTabProps) {
 
       {/* Closed state alerts */}
       {isClosed && (
-        <div className="p-3 rounded-lg bg-muted text-muted-foreground border border-border flex items-center justify-between text-xs">
+        <div className="p-3 rounded-xl bg-muted/60 text-muted-foreground border border-border flex items-center justify-between text-xs shadow-xs">
           <div className="flex items-center gap-2">
             <Info className="h-4 w-4 shrink-0 text-muted-foreground" />
             <span>This ticket is closed. Reopen the ticket to send a reply.</span>
@@ -173,7 +173,7 @@ export function ReplyTab({ ticket, isStale = false }: ReplyTabProps) {
             variant="outline"
             onClick={handleReopenTicket}
             disabled={patchTicketMutation.isPending}
-            className="h-7 text-xs gap-1"
+            className="h-7 text-xs gap-1 shadow-xs"
           >
             <RotateCcw className="h-3 w-3" />
             Reopen Ticket
@@ -183,7 +183,7 @@ export function ReplyTab({ ticket, isStale = false }: ReplyTabProps) {
 
       {/* 409 Closed conflict banner */}
       {closedConflictError && (
-        <div className="p-3 rounded-lg bg-destructive/10 text-destructive border border-destructive/20 flex items-center justify-between text-xs">
+        <div className="p-3 rounded-xl bg-destructive/10 text-destructive border border-destructive/20 flex items-center justify-between text-xs shadow-xs">
           <div className="flex items-center gap-2">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>This ticket is currently closed. Reopen it to send your reply.</span>
@@ -194,7 +194,7 @@ export function ReplyTab({ ticket, isStale = false }: ReplyTabProps) {
             variant="destructive"
             onClick={handleReopenTicket}
             disabled={patchTicketMutation.isPending}
-            className="h-7 text-xs gap-1"
+            className="h-7 text-xs gap-1 shadow-xs"
           >
             <RotateCcw className="h-3 w-3" />
             Reopen Ticket
@@ -217,11 +217,11 @@ export function ReplyTab({ ticket, isStale = false }: ReplyTabProps) {
             onKeyDown={handleKeyDown}
             disabled={isClosed || replyMutation.isPending}
             maxLength={5000}
-            className="min-h-[160px] text-sm pr-16 resize-y focus-visible:ring-1"
+            className="min-h-[160px] text-sm pr-16 resize-y bg-card border-border focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:border-primary shadow-xs leading-relaxed"
             aria-label="Author reply composer"
           />
           <span
-            className={`absolute right-3 bottom-2.5 text-[10px] pointer-events-none ${
+            className={`absolute right-3 bottom-2.5 text-[10px] pointer-events-none font-mono ${
               replyText.length > 4800 ? 'text-destructive font-bold' : 'text-muted-foreground'
             }`}
           >
@@ -232,14 +232,14 @@ export function ReplyTab({ ticket, isStale = false }: ReplyTabProps) {
         {/* Action bar below composer */}
         <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
           <span className="text-[11px] text-muted-foreground">
-            Press <kbd className="px-1 py-0.5 rounded bg-muted border border-border font-mono text-[10px]">Ctrl</kbd> + <kbd className="px-1 py-0.5 rounded bg-muted border border-border font-mono text-[10px]">Enter</kbd> to send
+            Press <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border/80 font-mono text-[10px] text-foreground">Ctrl</kbd> + <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border/80 font-mono text-[10px] text-foreground">Enter</kbd> to send
           </span>
 
           <Button
             type="button"
             onClick={() => setSendConfirmOpen(true)}
             disabled={!replyText.trim() || replyMutation.isPending || isClosed}
-            className="gap-2 text-xs h-8"
+            className="gap-2 text-xs h-8 bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs font-medium"
           >
             {replyMutation.isPending ? (
               <>

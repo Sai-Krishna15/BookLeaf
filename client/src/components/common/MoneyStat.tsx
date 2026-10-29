@@ -23,20 +23,20 @@ export function MoneyStat({
   className,
 }: MoneyStatProps) {
   return (
-    <Card className={cn('relative overflow-hidden border bg-card shadow-sm', className)}>
+    <Card className={cn('relative overflow-hidden border border-border/80 bg-card shadow-xs transition-shadow hover:shadow-subtle', className)}>
       <CardContent className="p-5">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
             {label}
           </p>
           {Icon && (
             <div
               className={cn(
-                'flex h-8 w-8 items-center justify-center rounded-lg',
-                variant === 'success' && 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400',
-                variant === 'warning' && 'bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400',
-                variant === 'default' && 'bg-primary/10 text-primary',
-                variant === 'muted' && 'bg-muted text-muted-foreground',
+                'flex h-8 w-8 items-center justify-center rounded-lg transition-colors',
+                variant === 'success' && 'bg-emerald-50 text-emerald-800 border border-emerald-200/60 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800',
+                variant === 'warning' && 'bg-amber-50 text-amber-800 border border-amber-200/60 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800',
+                variant === 'default' && 'bg-primary/10 text-primary border border-primary/15',
+                variant === 'muted' && 'bg-muted text-muted-foreground border border-border/60',
               )}
             >
               <Icon className="h-4 w-4" />
@@ -44,12 +44,12 @@ export function MoneyStat({
           )}
         </div>
 
-        <div className="mt-2 flex items-baseline gap-2">
-          <span className="text-2xl font-bold tracking-tight text-foreground">
+        <div className="mt-2.5 flex items-baseline gap-2">
+          <span className="text-2xl font-bold tracking-tight text-foreground tabular-nums">
             {formatINR(amount)}
           </span>
           {belowThreshold && (
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800">
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 shadow-xs dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800">
               Rolls over
             </span>
           )}

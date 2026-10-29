@@ -46,7 +46,7 @@ export function AdminLayout() {
   };
 
   const NavLinks = ({ onClick }: { onClick?: () => void }) => (
-    <nav className="space-y-1">
+    <nav className="space-y-1.5">
       {adminNavItems.map((item) => {
         const Icon = item.icon;
         return (
@@ -56,10 +56,10 @@ export function AdminLayout() {
             onClick={onClick}
             className={({ isActive }) =>
               cn(
-                'flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                'flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 isActive
-                  ? 'bg-primary/10 text-primary font-semibold'
-                  : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                  ? 'bg-primary/10 text-primary font-semibold shadow-xs border border-primary/15'
+                  : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground',
               )
             }
           >
@@ -73,31 +73,31 @@ export function AdminLayout() {
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-background">
-      {/* Desktop Sidebar */}
-      <aside className="hidden md:flex flex-col w-64 border-r border-border bg-card shrink-0">
-        <div className="flex items-center gap-2.5 px-6 h-16 border-b border-border">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-sm">
+      {/* Desktop Fixed/Sticky Sidebar */}
+      <aside className="hidden md:flex flex-col w-64 border-r border-border/80 bg-card shrink-0 sticky top-0 h-screen z-20">
+        <div className="flex items-center gap-3 px-6 h-16 border-b border-border/80 shrink-0">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-xs">
             <Shield className="h-4 w-4" />
           </div>
           <div>
-            <div className="font-bold text-base leading-none text-foreground">BookLeaf</div>
-            <div className="text-xs text-muted-foreground mt-0.5">Admin Ops Portal</div>
+            <div className="font-bold text-base leading-none text-foreground tracking-tight">BookLeaf</div>
+            <div className="text-xs text-muted-foreground mt-0.5 font-medium">Admin Ops Portal</div>
           </div>
         </div>
 
-        <div className="flex-1 px-4 py-6">
+        <div className="flex-1 px-4 py-6 overflow-y-auto">
           <NavLinks />
         </div>
 
-        <div className="p-4 border-t border-border">
-          <div className="text-xs text-muted-foreground px-2">BookLeaf Staff Triage v1.0</div>
+        <div className="p-4 border-t border-border/70 shrink-0">
+          <div className="text-xs text-muted-foreground/80 px-2 font-medium">BookLeaf Staff Triage</div>
         </div>
       </aside>
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Topbar */}
-        <header className="h-16 border-b border-border bg-card px-4 md:px-6 flex items-center justify-between sticky top-0 z-30">
+        <header className="h-16 border-b border-border/80 bg-card px-4 md:px-6 flex items-center justify-between sticky top-0 z-30 shadow-xs">
           <div className="flex items-center gap-3">
             {/* Mobile Sidebar Trigger */}
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
@@ -107,12 +107,12 @@ export function AdminLayout() {
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="w-64 p-0">
-                <SheetHeader className="px-6 h-16 border-b border-border flex flex-row items-center gap-2.5 text-left">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-sm">
+                <SheetHeader className="px-6 h-16 border-b border-border/80 flex flex-row items-center gap-3 text-left">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-xs">
                     <Shield className="h-4 w-4" />
                   </div>
                   <div>
-                    <SheetTitle className="font-bold text-base leading-none">BookLeaf</SheetTitle>
+                    <SheetTitle className="font-bold text-base leading-none tracking-tight">BookLeaf</SheetTitle>
                     <div className="text-xs text-muted-foreground mt-0.5">Admin Ops Portal</div>
                   </div>
                 </SheetHeader>
@@ -122,8 +122,8 @@ export function AdminLayout() {
               </SheetContent>
             </Sheet>
 
-            <span className="hidden sm:inline-block font-semibold text-sm text-foreground">
-              Support Operations Queue
+            <span className="hidden sm:inline-block font-semibold text-sm text-foreground tracking-tight">
+              Admin Ops Center
             </span>
           </div>
 
@@ -136,33 +136,33 @@ export function AdminLayout() {
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="flex items-center gap-2 pl-2 pr-3 h-9 rounded-full hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex items-center gap-2.5 pl-2 pr-3 h-9 rounded-full hover:bg-muted border border-border/60 focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label="User menu"
                 >
-                  <Avatar className="h-7 w-7">
-                    <AvatarFallback className="text-xs font-semibold bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900">
+                  <Avatar className="h-7 w-7 border border-primary/20">
+                    <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
                       {getInitials(user?.name)}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="text-sm font-medium hidden sm:inline-block max-w-[120px] truncate">
+                  <span className="text-sm font-medium hidden sm:inline-block max-w-[120px] truncate text-foreground">
                     {user?.name || 'Admin'}
                   </span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuContent align="end" className="w-56 border-border/80 shadow-subtle">
                 <DropdownMenuLabel>
                   <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-semibold leading-none">{user?.name}</p>
+                    <p className="text-sm font-semibold leading-none text-foreground">{user?.name}</p>
                     <p className="text-xs leading-none text-muted-foreground">{user?.email}</p>
-                    <div className="pt-1">
-                      <span className="inline-block px-1.5 py-0.5 text-[10px] font-semibold bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200 rounded">
-                        Admin / Staff
+                    <div className="pt-1.5">
+                      <span className="inline-block px-2 py-0.5 text-[10px] font-semibold bg-primary/15 text-primary rounded-full border border-primary/20">
+                        Admin
                       </span>
                     </div>
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout} className="text-destructive cursor-pointer">
+                <DropdownMenuItem onClick={handleLogout} className="text-destructive cursor-pointer hover:bg-destructive/10">
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>Log out</span>
                 </DropdownMenuItem>

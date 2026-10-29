@@ -27,7 +27,7 @@ export function CategoryBadge({ category, className, ...props }: CategoryBadgePr
     return (
       <span
         className={cn(
-          'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground border border-border',
+          'inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-muted text-muted-foreground border border-border shadow-xs',
           className,
         )}
         {...props}
@@ -43,7 +43,7 @@ export function CategoryBadge({ category, className, ...props }: CategoryBadgePr
   return (
     <span
       className={cn(
-        'inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-800 border border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700',
+        'inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-stone-100 text-stone-800 border border-stone-200/90 shadow-xs dark:bg-stone-800 dark:text-stone-200 dark:border-stone-700',
         className,
       )}
       {...props}

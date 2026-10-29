@@ -253,7 +253,7 @@ export function QueueTable({
   return (
     <div
       className={cn(
-        'rounded-xl border border-border bg-card shadow-sm overflow-hidden relative',
+        'rounded-xl border border-border bg-card shadow-xs overflow-hidden relative',
         className,
       )}
       role="region"
@@ -292,13 +292,13 @@ export function QueueTable({
       ) : (
         <div className="overflow-x-auto">
           <Table>
-            <TableHeader className="bg-muted/40">
+            <TableHeader className="bg-muted/50 border-b border-border/80">
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id} className="hover:bg-transparent">
                   {headerGroup.headers.map((header) => (
                     <TableHead
                       key={header.id}
-                      className="text-xs font-semibold text-muted-foreground py-3 h-auto"
+                      className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground py-3 h-auto"
                     >
                       {header.isPlaceholder
                         ? null
@@ -319,8 +319,8 @@ export function QueueTable({
                     onClick={() => handleRowClick(ticket.id)}
                     onKeyDown={(e) => handleRowKeyDown(e, ticket.id)}
                     className={cn(
-                      'cursor-pointer transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border-b border-border/60',
-                      ticket.isOverdue && 'bg-red-50/30 dark:bg-red-950/20 hover:bg-red-50/50 dark:hover:bg-red-950/30',
+                      'cursor-pointer transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border-b border-border/60',
+                      ticket.isOverdue && 'bg-destructive/[0.04] hover:bg-destructive/[0.08]',
                     )}
                   >
                     {row.getVisibleCells().map((cell) => (

@@ -80,11 +80,14 @@ export function ControlsCard({ ticket, onCategoryChanged }: ControlsCardProps) {
   };
 
   return (
-    <Card className="shadow-sm border-border bg-card">
-      <CardHeader className="pb-3 border-b border-border/50">
-        <CardTitle className="text-sm font-semibold flex items-center justify-between">
+    <Card className="shadow-xs border-border bg-card rounded-xl">
+      <CardHeader className="pb-3 border-b border-border/60">
+        <CardTitle className="text-xs font-semibold flex items-center justify-between uppercase tracking-wider text-muted-foreground">
           <span>Ticket Controls</span>
-          <span className="text-[11px] font-normal text-muted-foreground">Auto-saved</span>
+          <span className="flex items-center gap-1.5 text-[11px] font-normal text-muted-foreground normal-case">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block" />
+            auto-saved
+          </span>
         </CardTitle>
       </CardHeader>
 

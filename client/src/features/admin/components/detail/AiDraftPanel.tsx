@@ -3,7 +3,6 @@ import {
   Sparkles,
   RefreshCw,
   AlertTriangle,
-  AlertCircle,
   Info,
   Clock,
   FileText,
@@ -170,16 +169,16 @@ export function AiDraftPanel({
         <div className="flex items-center gap-2">
           {isLoading ? (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground animate-pulse">
-              <Sparkles className="h-3.5 w-3.5 text-purple-600 animate-spin" />
+              <Sparkles className="h-3.5 w-3.5 text-primary animate-spin" />
               <span>Generating AI draft...</span>
             </div>
           ) : draft ? (
             <div className="flex items-center gap-1.5">
               <span
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
+                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
                   hasUserEdits
-                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
-                    : 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-300 dark:border-purple-800'
+                    ? 'bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                    : 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-emerald-300 border border-primary/20'
                 }`}
               >
                 <Sparkles className="h-3 w-3" />
@@ -219,7 +218,7 @@ export function AiDraftPanel({
             size="sm"
             onClick={handleRegenerateClick}
             disabled={disabled || regenerateMutation.isPending || isLoading || rateLimitSeconds !== null}
-            className="h-7 text-xs gap-1.5"
+            className="h-7 text-xs gap-1.5 shadow-xs"
           >
             <RefreshCw
               className={`h-3 w-3 ${regenerateMutation.isPending ? 'animate-spin' : ''}`}
@@ -235,17 +234,17 @@ export function AiDraftPanel({
 
       {/* 2. Pending AI Draft Arrival Banner (When user was already typing) */}
       {hasPendingAiArrival && draft && (
-        <div className="flex items-center justify-between p-2.5 rounded-md bg-purple-50 dark:bg-purple-950/40 text-purple-900 dark:text-purple-200 border border-purple-200 dark:border-purple-800 text-xs">
-          <div className="flex items-center gap-1.5">
-            <Sparkles className="h-4 w-4 text-purple-600 dark:text-purple-400 shrink-0" />
-            <span>AI draft has arrived. Click to inspect or insert into composer.</span>
+        <div className="flex items-center justify-between p-3 rounded-xl bg-primary/5 text-foreground border border-primary/20 text-xs shadow-xs">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary shrink-0" />
+            <span className="font-medium">AI draft has arrived. Click to inspect or insert into composer.</span>
           </div>
           <Button
             type="button"
             size="sm"
             variant="outline"
             onClick={() => onApplyDraft(draft.body)}
-            className="h-6 px-2 text-xs bg-white dark:bg-purple-900/60"
+            className="h-7 px-2.5 text-xs bg-card hover:bg-primary/10 border-primary/30 text-primary font-medium shadow-xs"
           >
             Insert AI Draft
           </Button>
@@ -254,9 +253,9 @@ export function AiDraftPanel({
 
       {/* 3. Stale Draft Banner (Author sent a newer message) */}
       {(isStale || draft?.stale) && (
-        <div className="flex items-center gap-2 p-2.5 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800 text-xs">
-          <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
-          <span>
+        <div className="flex items-center gap-2.5 p-3 rounded-xl bg-amber-500/10 text-amber-900 dark:text-amber-200 border border-amber-500/20 text-xs shadow-xs">
+          <Clock className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" />
+          <span className="leading-relaxed">
             The author has replied since this draft was generated. Regenerating the draft is recommended.
           </span>
         </div>
@@ -264,12 +263,12 @@ export function AiDraftPanel({
 
       {/* 4. AI Warnings Callout (e.g. low confidence, policy clarification needed) */}
       {draft?.warnings && draft.warnings.length > 0 && (
-        <div className="p-2.5 rounded-md bg-amber-50/80 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800 text-xs space-y-1">
-          <div className="flex items-center gap-1.5 font-semibold text-amber-800 dark:text-amber-300">
-            <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+        <div className="p-3 rounded-xl bg-amber-500/10 text-amber-900 dark:text-amber-200 border border-amber-500/20 text-xs space-y-1.5 shadow-xs">
+          <div className="flex items-center gap-1.5 font-semibold text-amber-900 dark:text-amber-300">
+            <AlertTriangle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
             <span>AI Policy Verification Notes:</span>
           </div>
-          <ul className="list-disc list-inside space-y-0.5 text-[11px] pl-1">
+          <ul className="list-disc list-inside space-y-1 text-xs pl-1 text-amber-900/90 dark:text-amber-300/90">
             {draft.warnings.map((warn, i) => (
               <li key={i}>{warn}</li>
             ))}
@@ -279,12 +278,17 @@ export function AiDraftPanel({
 
       {/* 5. Unavailable Fallback Banner + Quick-Insert Snippets */}
       {isUnavailable && (
-        <div className="p-3 rounded-md bg-amber-50/90 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800 text-xs space-y-2">
-          <div className="flex items-start gap-2">
-            <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
-            <div className="space-y-0.5 flex-1">
-              <span className="font-semibold">AI draft is currently unavailable</span>
-              <p className="text-[11px] text-amber-800 dark:text-amber-300">
+        <div className="p-4 rounded-xl bg-card text-foreground border border-border text-xs space-y-3 shadow-xs">
+          <div className="flex items-start gap-2.5">
+            <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 shrink-0">
+              <Sparkles className="h-4 w-4" />
+            </div>
+            <div className="space-y-1 flex-1">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-foreground text-xs">AI draft is currently unavailable</span>
+                <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border/50">Manual Mode</span>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
                 {draftResponse?.reason ||
                   'The AI drafting service was bypassed, rate limited, or failed. You can compose a manual response or use the canned policy snippets below.'}
               </p>
@@ -292,9 +296,9 @@ export function AiDraftPanel({
           </div>
 
           {/* Quick-Insert Snippets Chips */}
-          <div className="pt-1 border-t border-amber-200/80 dark:border-amber-800/60">
-            <div className="flex items-center gap-1 text-[11px] font-medium text-amber-900 dark:text-amber-200 mb-1.5">
-              <FileText className="h-3 w-3" />
+          <div className="pt-2.5 border-t border-border/60">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-foreground mb-2">
+              <FileText className="h-3.5 w-3.5 text-primary" />
               <span>Quick-insert policy snippets:</span>
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -304,10 +308,10 @@ export function AiDraftPanel({
                   type="button"
                   onClick={() => onInsertSnippet(snip.template)}
                   disabled={disabled}
-                  className="px-2 py-1 rounded bg-white dark:bg-amber-900/40 border border-amber-300 dark:border-amber-700 text-amber-950 dark:text-amber-100 hover:bg-amber-100 dark:hover:bg-amber-900/70 text-[11px] transition-colors flex items-center gap-1"
+                  className="px-2.5 py-1 rounded-full bg-muted/60 hover:bg-primary/10 hover:border-primary/40 border border-border text-foreground hover:text-primary text-[11px] font-medium transition-all duration-150 flex items-center gap-1 cursor-pointer disabled:opacity-50"
                 >
-                  <span>+</span>
-                  <span className="font-medium">{snip.title}</span>
+                  <span className="font-semibold">+</span>
+                  <span>{snip.title}</span>
                 </button>
               ))}
             </div>

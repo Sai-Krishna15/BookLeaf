@@ -114,7 +114,7 @@ export function TicketDetailPage() {
           <Skeleton className="h-8 w-3/4" />
           <Skeleton className="h-4 w-1/3" />
         </div>
-        <Card className="p-6 space-y-4">
+        <Card className="p-6 space-y-4 border-border/80 shadow-xs">
           <Skeleton className="h-24 w-full" />
           <Skeleton className="h-20 w-full" />
         </Card>
@@ -151,14 +151,14 @@ export function TicketDetailPage() {
     <div className="space-y-6 max-w-4xl mx-auto pb-12">
       {/* Navigation & Header */}
       <div className="flex items-center justify-between gap-4">
-        <Button variant="ghost" size="sm" asChild className="gap-1.5 -ml-2 text-muted-foreground">
+        <Button variant="ghost" size="sm" asChild className="gap-1.5 -ml-2 text-muted-foreground hover:text-foreground">
           <Link to="/tickets">
             <ArrowLeft className="h-4 w-4" />
             Back to Tickets
           </Link>
         </Button>
 
-        <span className="text-xs font-mono text-muted-foreground">
+        <span className="text-xs font-mono font-semibold text-muted-foreground bg-muted/60 px-2.5 py-1 rounded-md border border-border/60 shadow-xs">
           Ticket {formatTicketNumber(ticket.ticketNumber)}
         </span>
       </div>
@@ -166,7 +166,7 @@ export function TicketDetailPage() {
       <div className="space-y-2">
         <div className="flex items-start justify-between gap-4 flex-wrap sm:flex-nowrap">
           <h1 className="text-2xl font-bold tracking-tight text-foreground">{ticket.subject}</h1>
-          <StatusBadge status={ticket.status as TicketStatus} className="text-sm px-3 py-1" />
+          <StatusBadge status={ticket.status as TicketStatus} className="text-xs px-3 py-1 shadow-xs" />
         </div>
 
         <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
@@ -179,7 +179,7 @@ export function TicketDetailPage() {
             <span className="font-medium">General / Account Level</span>
           )}
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5 tabular-nums">
             <Calendar className="h-3.5 w-3.5" />
             <span>Created {formatDateTime(ticket.createdAt)}</span>
           </div>
@@ -190,12 +190,12 @@ export function TicketDetailPage() {
       <TicketStatusNote status={ticket.status as TicketStatus} />
 
       {/* Conversation Thread Container */}
-      <Card className="border border-border shadow-sm overflow-hidden flex flex-col">
-        <CardHeader className="p-4 border-b border-border bg-muted/20 flex flex-row items-center justify-between">
+      <Card className="border border-border/80 shadow-xs overflow-hidden flex flex-col bg-card">
+        <CardHeader className="p-4 border-b border-border/80 bg-muted/30 flex flex-row items-center justify-between">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
             Conversation Thread
           </CardTitle>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground tabular-nums">
             {messages ? `${messages.length + 1} messages` : 'Loading messages...'}
           </span>
         </CardHeader>
@@ -219,100 +219,95 @@ export function TicketDetailPage() {
           {messagesLoading && (
             <div className="space-y-3 pt-2">
               <Skeleton className="h-16 w-3/4 ml-auto" />
-              <Skeleton className="h-20 w-3/4" />
+              <Skeleton className="h-16 w-3/4" />
             </div>
           )}
 
-          {messages &&
-            messages.map((msg) => (
+          {messages?.map((msg) => {
+            const isAuthor = msg.type === 'AUTHOR_MESSAGE';
+            return (
               <MessageBubble
                 key={msg.id}
-                senderName={msg.sender?.displayName || 'BookLeaf Support'}
-                senderRole={msg.type === 'AUTHOR_MESSAGE' ? 'AUTHOR' : 'ADMIN'}
+                senderName={isAuthor ? 'You' : msg.sender.displayName || 'BookLeaf Support'}
+                senderRole={isAuthor ? 'AUTHOR' : 'ADMIN'}
                 body={msg.body}
                 createdAt={msg.createdAt}
               />
-            ))}
+            );
+          })}
 
           <div ref={threadEndRef} />
-
-          {/* Floating New Response Pill */}
-          {showScrollBottomPill && (
-            <div className="sticky bottom-2 flex justify-center pointer-events-none">
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={scrollToBottom}
-                className="pointer-events-auto gap-1.5 shadow-md border text-xs h-7 px-3 bg-background/95 backdrop-blur-sm"
-              >
-                <span>Latest messages</span>
-                <ArrowDown className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          )}
         </CardContent>
 
-        {/* 3. Follow-up Reply Composer */}
-        <CardFooter className="p-4 border-t border-border bg-card flex flex-col gap-3">
+        {/* Floating Scroll to Bottom Indicator */}
+        {showScrollBottomPill && (
+          <div className="sticky bottom-4 flex justify-center pointer-events-none">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={scrollToBottom}
+              className="pointer-events-auto shadow-md gap-1 text-xs rounded-full border border-border"
+            >
+              <ArrowDown className="h-3.5 w-3.5" />
+              New replies below
+            </Button>
+          </div>
+        )}
+
+        {/* Follow-up Reply Box / Closed State Banner */}
+        <CardFooter className="p-4 border-t border-border/80 bg-muted/15 flex flex-col items-stretch">
           {isClosed ? (
-            <div className="w-full p-3 rounded-lg bg-muted text-center text-xs text-muted-foreground">
-              This ticket is closed and no longer accepting follow-up responses. If you have a new question, please{' '}
-              <Link to="/tickets/new" className="text-primary underline font-medium">
-                submit a new query
-              </Link>
-              .
+            <div className="flex items-center gap-2.5 p-3 rounded-lg bg-stone-100 text-stone-800 border border-stone-200 text-xs w-full dark:bg-stone-900/40 dark:border-stone-800 dark:text-stone-300">
+              <Info className="h-4 w-4 shrink-0 text-stone-600 dark:text-stone-400" />
+              <span>This ticket is closed and no longer accepting follow-up responses. If you have further questions, please submit a new query.</span>
             </div>
           ) : (
-            <form onSubmit={handleSendReply} className="w-full space-y-3">
+            <form onSubmit={handleSendReply} className="space-y-3 w-full">
               {isResolved && (
-                <div className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 p-2 rounded-md border border-amber-200 dark:border-amber-800">
-                  <Info className="h-3.5 w-3.5 shrink-0" />
-                  <span>
-                    This ticket is currently marked resolved. Sending a follow-up reply will automatically reopen it for staff review.
-                  </span>
+                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50/70 border border-amber-200 text-amber-900 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300 text-xs">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <span>This ticket is marked as resolved. Sending a follow-up reply will automatically reopen it for support attention.</span>
                 </div>
               )}
 
               {errorMessage && (
-                <div className="flex items-center gap-1.5 text-xs text-destructive bg-destructive/10 p-2 rounded-md border border-destructive/20">
-                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-xs">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
                   <span>{errorMessage}</span>
                 </div>
               )}
 
-              <div className="relative">
-                <Textarea
-                  placeholder="Type your response to the support team..."
-                  value={replyText}
-                  onChange={(e) => setReplyText(e.target.value)}
-                  className="min-h-[100px] text-sm pr-16 resize-y"
-                  maxLength={5000}
-                  disabled={sendFollowUpMutation.isPending}
-                  aria-label="Follow-up message"
-                />
-                <span className="absolute right-3 bottom-2.5 text-[10px] text-muted-foreground pointer-events-none">
-                  {replyText.length} / 5000
-                </span>
-              </div>
+              <Textarea
+                value={replyText}
+                onChange={(e) => {
+                  setReplyText(e.target.value);
+                  if (errorMessage) setErrorMessage(null);
+                }}
+                placeholder="Type your response or follow-up question here..."
+                className="min-h-[100px] resize-y bg-background border-border/80 focus-visible:ring-primary/20 text-sm"
+                maxLength={5000}
+                aria-label="Follow-up message"
+              />
 
-              <div className="flex justify-between items-center">
-                <span className="text-[11px] text-muted-foreground">
-                  Our team typically reviews follow-up replies within 24 to 48 hours.
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-muted-foreground tabular-nums">
+                  {replyText.length} / 5000 characters
                 </span>
 
                 <Button
                   type="submit"
+                  size="sm"
                   disabled={!replyText.trim() || sendFollowUpMutation.isPending}
-                  className="gap-2"
+                  className="gap-1.5 shadow-xs"
                 >
                   {sendFollowUpMutation.isPending ? (
                     <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       Sending...
                     </>
                   ) : (
                     <>
-                      <Send className="h-4 w-4" />
+                      <Send className="h-3.5 w-3.5" />
                       Send Reply
                     </>
                   )}

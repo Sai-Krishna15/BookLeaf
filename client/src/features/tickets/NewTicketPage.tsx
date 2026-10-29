@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Loader2, Send, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, Loader2, Send, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -165,45 +165,44 @@ export function NewTicketPage() {
         description="Describe your inquiry regarding royalties, ISBNs, printing, distribution, or production stages."
       />
 
-      <Card className="shadow-sm border-border">
-        <CardHeader>
-          <CardTitle className="text-lg">Query Details</CardTitle>
-          <CardDescription>
+      {serverError && (
+        <div className="flex items-start gap-2.5 p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm shadow-xs">
+          <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-semibold">Unable to submit query</p>
+            <p className="mt-0.5 opacity-90">{serverError}</p>
+          </div>
+        </div>
+      )}
+
+      <Card className="border border-border/80 shadow-xs bg-card">
+        <CardHeader className="p-6 pb-4 border-b border-border/80">
+          <CardTitle className="text-lg font-semibold tracking-tight">Query Details</CardTitle>
+          <CardDescription className="text-xs text-muted-foreground">
             Our author support specialists typically respond within 24 to 48 business hours.
           </CardDescription>
         </CardHeader>
 
-        <CardContent>
-          {serverError && (
-            <div
-              role="alert"
-              className="mb-6 flex items-start gap-2.5 rounded-lg bg-destructive/10 p-3.5 text-sm text-destructive border border-destructive/20"
-            >
-              <ShieldAlert className="h-5 w-5 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-semibold">Unable to submit query</p>
-                <p className="mt-0.5 text-xs opacity-90">{serverError}</p>
-              </div>
-            </div>
-          )}
-
+        <CardContent className="p-6">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              {/* Book Selection */}
+              {/* Related Book Selector */}
               <FormField
                 control={form.control}
                 name="bookId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Related Book</FormLabel>
+                    <FormLabel className="text-xs font-semibold text-foreground">
+                      Related Book or Query Scope
+                    </FormLabel>
                     <Select
                       disabled={booksLoading}
-                      onValueChange={field.onChange}
                       value={field.value || 'general'}
+                      onValueChange={field.onChange}
                     >
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a book or general inquiry" />
+                        <SelectTrigger className="border-border/80 bg-background text-sm">
+                          <SelectValue placeholder="Select a book or General inquiry..." />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -223,10 +222,10 @@ export function NewTicketPage() {
                         ))}
                       </SelectContent>
                     </Select>
-                    <FormDescription>
-                      Choose the specific title this query relates to, or General for account-wide questions.
+                    <FormDescription className="text-[11px] text-muted-foreground">
+                      Attach this query to a specific title, or select General / Account Level.
                     </FormDescription>
-                    <FormMessage />
+                    <FormMessage className="text-xs text-destructive" />
                   </FormItem>
                 )}
               />
@@ -238,8 +237,10 @@ export function NewTicketPage() {
                 render={({ field }) => (
                   <FormItem>
                     <div className="flex items-center justify-between">
-                      <FormLabel>Subject</FormLabel>
-                      <span className="text-xs text-muted-foreground">
+                      <FormLabel className="text-xs font-semibold text-foreground">
+                        Subject
+                      </FormLabel>
+                      <span className="text-[11px] text-muted-foreground tabular-nums">
                         {subjectValue.length} / 150
                       </span>
                     </div>
@@ -247,11 +248,14 @@ export function NewTicketPage() {
                       <Input
                         placeholder="e.g. Royalty payout clarification for Q1"
                         maxLength={150}
+                        className="border-border/80 bg-background text-sm"
                         {...field}
                       />
                     </FormControl>
-                    <FormDescription>Summarize your inquiry in a concise title.</FormDescription>
-                    <FormMessage />
+                    <FormDescription className="text-[11px] text-muted-foreground">
+                      Summarize your inquiry in a concise title.
+                    </FormDescription>
+                    <FormMessage className="text-xs text-destructive" />
                   </FormItem>
                 )}
               />
@@ -263,48 +267,53 @@ export function NewTicketPage() {
                 render={({ field }) => (
                   <FormItem>
                     <div className="flex items-center justify-between">
-                      <FormLabel>Description</FormLabel>
-                      <span className="text-xs text-muted-foreground">
+                      <FormLabel className="text-xs font-semibold text-foreground">
+                        Description
+                      </FormLabel>
+                      <span className="text-[11px] text-muted-foreground tabular-nums">
                         {descriptionValue.length} / 5000
                       </span>
                     </div>
                     <FormControl>
                       <Textarea
                         placeholder="Provide details about your query. Include any relevant dates, order details, or questions..."
-                        className="min-h-[160px] leading-relaxed resize-y"
+                        className="min-h-[140px] resize-y border-border/80 bg-background text-sm focus-visible:ring-primary/20 leading-relaxed"
                         maxLength={5000}
                         {...field}
                       />
                     </FormControl>
-                    <FormDescription>
+                    <FormDescription className="text-[11px] text-muted-foreground">
                       Minimum 20 characters. Include clear specifics to help our team assist you quickly.
                     </FormDescription>
-                    <FormMessage />
+                    <FormMessage className="text-xs text-destructive" />
                   </FormItem>
                 )}
               />
 
               {/* Attachments UI */}
               <div className="space-y-2 pt-1 border-t border-border/60">
-                <FormLabel>Reference Attachments (Optional)</FormLabel>
+                <FormLabel className="text-xs font-semibold text-foreground">
+                  Reference Attachments (Optional)
+                </FormLabel>
                 <FileDropzone files={attachments} onFilesChange={setAttachments} />
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-border/60">
                 <Button
                   type="button"
                   variant="outline"
+                  size="sm"
                   onClick={handleCancel}
                   disabled={createTicketMutation.isPending}
                 >
                   Cancel
                 </Button>
-
                 <Button
                   type="submit"
+                  size="sm"
                   disabled={createTicketMutation.isPending}
-                  className="gap-2 min-w-[140px]"
+                  className="gap-2 shadow-xs min-w-[140px]"
                 >
                   {createTicketMutation.isPending ? (
                     <>

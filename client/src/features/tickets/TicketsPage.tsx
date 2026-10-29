@@ -133,7 +133,7 @@ export function TicketsPage() {
         title="My Support Tickets"
         description="Track your inquiries, follow-ups, and responses from the BookLeaf support team."
         actions={
-          <Button asChild size="sm" className="gap-1.5 shadow-sm">
+          <Button asChild size="sm" className="gap-1.5 shadow-xs">
             <Link to="/tickets/new">
               <Plus className="h-4 w-4" />
               New Support Query
@@ -143,7 +143,7 @@ export function TicketsPage() {
       />
 
       {/* Filters Toolbar */}
-      <Card className="p-4 border-border shadow-sm bg-card">
+      <Card className="p-4 border-border/80 shadow-xs bg-card">
         <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
           {/* Search Box */}
           <div className="relative flex-1 max-w-md">
@@ -152,7 +152,7 @@ export function TicketsPage() {
               placeholder="Search by subject or description..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              className="pl-9 h-9 text-xs sm:text-sm"
+              className="pl-9 h-9 text-xs sm:text-sm bg-background border-border/80"
               aria-label="Search tickets"
             />
           </div>
@@ -160,7 +160,7 @@ export function TicketsPage() {
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
             {/* Status Filter */}
             <Select value={statusParam} onValueChange={handleStatusChange}>
-              <SelectTrigger className="w-[140px] h-9 text-xs">
+              <SelectTrigger className="w-[140px] h-9 text-xs border-border/80 bg-background">
                 <Filter className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
@@ -175,7 +175,7 @@ export function TicketsPage() {
 
             {/* Sort Selector */}
             <Select value={sortParam} onValueChange={handleSortChange}>
-              <SelectTrigger className="w-[130px] h-9 text-xs">
+              <SelectTrigger className="w-[130px] h-9 text-xs border-border/80 bg-background">
                 <ArrowUpDown className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
                 <SelectValue placeholder="Sort" />
               </SelectTrigger>
@@ -190,7 +190,7 @@ export function TicketsPage() {
 
       {/* Main Tickets List / Table */}
       {isLoading && (
-        <Card className="p-6 border-border">
+        <Card className="p-6 border-border/80 shadow-xs bg-card">
           <TableSkeleton rows={5} cols={5} />
         </Card>
       )}
@@ -198,125 +198,125 @@ export function TicketsPage() {
       {isError && (
         <ErrorState
           title="Failed to load your tickets"
-          message="Could not load your ticket queue. Please verify your connection."
+          message="Could not retrieve your support queries. Please check your connection and try again."
           onRetry={() => refetch()}
         />
       )}
 
       {!isLoading && !isError && tickets.length === 0 && (
-        <>
-          {hasActiveFilters ? (
-            <EmptyState
-              icon={Search}
-              title="No Matching Tickets"
-              description="No support queries match your search or status filter."
-              action={
-                <Button variant="outline" size="sm" onClick={clearFilters}>
-                  Clear Filters
-                </Button>
-              }
-            />
-          ) : (
-            <EmptyState
-              icon={Ticket}
-              title="No Support Queries Yet"
-              description="You haven't submitted any queries. Need assistance with royalties, ISBNs, or printing?"
-              action={
-                <Button asChild size="sm">
-                  <Link to="/tickets/new">Raise your first query</Link>
-                </Button>
-              }
-            />
-          )}
-        </>
+        <EmptyState
+          icon={Ticket}
+          title={hasActiveFilters ? 'No Matching Tickets' : 'No Support Queries Yet'}
+          description={
+            hasActiveFilters
+              ? 'No tickets match the selected filters or search terms.'
+              : 'Have a question about your royalty, book distribution, or metadata? Raise your first query.'
+          }
+          action={
+            hasActiveFilters ? (
+              <Button variant="outline" size="sm" onClick={clearFilters}>
+                Clear Filters
+              </Button>
+            ) : (
+              <Button asChild size="sm">
+                <Link to="/tickets/new">Create Ticket</Link>
+              </Button>
+            )
+          }
+        />
       )}
 
       {!isLoading && !isError && tickets.length > 0 && (
-        <Card className="border border-border shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/40 hover:bg-muted/40">
-                  <TableHead className="w-[120px] font-semibold">Ticket ID</TableHead>
-                  <TableHead className="min-w-[240px] font-semibold">Subject</TableHead>
-                  <TableHead className="min-w-[180px] font-semibold">Related Book</TableHead>
-                  <TableHead className="w-[130px] font-semibold">Status</TableHead>
-                  <TableHead className="w-[150px] font-semibold text-right">Last Updated</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {tickets.map((ticket) => {
-                  const unread = isTicketUnread(ticket.id);
-
-                  return (
-                    <TableRow
-                      key={ticket.id}
-                      className="cursor-pointer hover:bg-muted/50 transition-colors group"
-                    >
-                      <TableCell className="font-mono text-xs font-semibold text-foreground">
-                        <Link
-                          to={`/tickets/${ticket.id}`}
-                          className="flex items-center gap-1.5 group-hover:text-primary transition-colors"
-                        >
-                          {unread && (
-                            <span
-                              className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0"
-                              title="New response received"
-                            />
-                          )}
-                          <span>{formatTicketNumber(ticket.ticketNumber)}</span>
-                        </Link>
-                      </TableCell>
-
-                      <TableCell>
-                        <Link
-                          to={`/tickets/${ticket.id}`}
-                          className="block font-medium text-foreground group-hover:text-primary transition-colors line-clamp-1"
-                        >
-                          {ticket.subject}
-                        </Link>
-                        <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
-                          {ticket.description}
-                        </p>
-                      </TableCell>
-
-                      <TableCell className="text-xs text-muted-foreground">
-                        {ticket.book ? (
-                          <div className="flex items-center gap-1.5 font-medium text-foreground truncate max-w-[200px]">
-                            <BookOpen className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            <span className="truncate">{ticket.book.title}</span>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground font-medium">
-                            General / Account Level
-                          </span>
-                        )}
-                      </TableCell>
-
-                      <TableCell>
-                        <StatusBadge status={ticket.status as TicketStatus} />
-                      </TableCell>
-
-                      <TableCell
-                        className="text-right text-xs text-muted-foreground whitespace-nowrap"
-                        title={formatDateTime(ticket.updatedAt)}
+        <div className="space-y-4">
+          <Card className="border border-border/80 shadow-xs overflow-hidden bg-card">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent bg-muted/40 border-b border-border/80">
+                    <TableHead className="w-[110px] text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ticket ID</TableHead>
+                    <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Subject</TableHead>
+                    <TableHead className="w-[200px] text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden md:table-cell">
+                      Related Book
+                    </TableHead>
+                    <TableHead className="w-[120px] text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</TableHead>
+                    <TableHead className="w-[150px] text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Last Updated
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {tickets.map((t) => {
+                    const isUnread = isTicketUnread(t.id);
+                    return (
+                      <TableRow
+                        key={t.id}
+                        className="group hover:bg-muted/40 transition-colors border-b border-border/60"
                       >
-                        {relativeTime(ticket.updatedAt)}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
+                        <TableCell className="font-mono text-xs font-semibold text-foreground">
+                          <Link
+                            to={`/tickets/${t.id}`}
+                            className="hover:underline flex items-center gap-1.5"
+                          >
+                            {isUnread && (
+                              <span
+                                className="h-2 w-2 rounded-full bg-primary shrink-0 ring-2 ring-background"
+                                title="New response received"
+                                aria-label="Unread ticket"
+                              />
+                            )}
+                            <span>{formatTicketNumber(t.ticketNumber)}</span>
+                          </Link>
+                        </TableCell>
 
-          {/* Pagination Controls */}
-          {meta && (
-            <div className="px-4 border-t border-border">
-              <Pagination meta={meta} onPageChange={handlePageChange} />
+                        <TableCell>
+                          <Link to={`/tickets/${t.id}`} className="block space-y-0.5">
+                            <span className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors line-clamp-1">
+                              {t.subject}
+                            </span>
+                            <span className="text-xs text-muted-foreground line-clamp-1">
+                              {t.description}
+                            </span>
+                          </Link>
+                        </TableCell>
+
+                        <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
+                          {t.book ? (
+                            <div className="flex items-center gap-1.5 truncate">
+                              <BookOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                              <span className="truncate max-w-[180px] font-medium text-foreground">
+                                {t.book.title}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">General / Account Level</span>
+                          )}
+                        </TableCell>
+
+                        <TableCell>
+                          <StatusBadge status={t.status as TicketStatus} />
+                        </TableCell>
+
+                        <TableCell className="text-right text-xs text-muted-foreground whitespace-nowrap tabular-nums">
+                          <span title={formatDateTime(t.updatedAt)}>
+                            {relativeTime(t.updatedAt)}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
             </div>
+          </Card>
+
+          {/* Pagination */}
+          {meta && (
+            <Pagination
+              meta={meta}
+              onPageChange={handlePageChange}
+            />
           )}
-        </Card>
+        </div>
       )}
     </div>
   );

@@ -43,10 +43,10 @@ export function AuthorBookFactsCard({ ticket }: AuthorBookFactsCardProps) {
   };
 
   return (
-    <Card className="shadow-sm border-border bg-card">
-      <CardHeader className="pb-3 border-b border-border/50">
-        <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
-          <User className="h-4 w-4 text-primary" />
+    <Card className="shadow-xs border-border bg-card rounded-xl">
+      <CardHeader className="pb-3 border-b border-border/60">
+        <CardTitle className="text-xs font-semibold flex items-center gap-1.5 uppercase tracking-wider text-muted-foreground">
+          <User className="h-3.5 w-3.5 text-primary" />
           <span>Author & Context Facts</span>
         </CardTitle>
       </CardHeader>
@@ -96,7 +96,7 @@ export function AuthorBookFactsCard({ ticket }: AuthorBookFactsCardProps) {
 
                 {/* ISBN with Copy Button */}
                 {book.isbn && (
-                  <div className="flex items-center justify-between p-2 rounded-md bg-muted/50 border border-border">
+                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-muted/50">
                     <div className="space-y-0.5">
                       <span className="text-[10px] text-muted-foreground uppercase font-medium">ISBN</span>
                       <div className="font-mono text-xs font-semibold text-foreground">
@@ -108,7 +108,7 @@ export function AuthorBookFactsCard({ ticket }: AuthorBookFactsCardProps) {
                       variant="ghost"
                       size="sm"
                       onClick={() => handleCopyIsbn(book.isbn)}
-                      className="h-7 w-7 p-0"
+                      className="h-7 w-7 p-0 hover:bg-card"
                       title="Copy ISBN"
                     >
                       {copiedIsbn ? (
@@ -122,41 +122,41 @@ export function AuthorBookFactsCard({ ticket }: AuthorBookFactsCardProps) {
 
                 {/* Published vs In Production */}
                 {book.isPublished ? (
-                  <div className="space-y-2 pt-1 border-t border-border/50">
+                  <div className="space-y-2.5 pt-1 border-t border-border/50">
                     <div className="grid grid-cols-2 gap-2">
-                      <div className="p-2 rounded bg-muted/40 border border-border/50">
-                        <span className="text-[10px] text-muted-foreground">MRP</span>
-                        <div className="font-semibold">{formatINR(book.mrp)}</div>
+                      <div className="p-2.5 rounded-lg bg-muted/40">
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">MRP</span>
+                        <div className="font-semibold text-foreground font-mono">{formatINR(book.mrp)}</div>
                       </div>
-                      <div className="p-2 rounded bg-muted/40 border border-border/50">
-                        <span className="text-[10px] text-muted-foreground">Copies Sold</span>
-                        <div className="font-semibold">
+                      <div className="p-2.5 rounded-lg bg-muted/40">
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Copies Sold</span>
+                        <div className="font-semibold text-foreground font-mono">
                           {book.totalCopiesSold.toLocaleString('en-IN')}
                         </div>
                       </div>
                     </div>
 
-                    <div className="space-y-1.5 p-2 rounded-md bg-muted/30 border border-border/50">
+                    <div className="space-y-2 p-2.5 rounded-lg bg-muted/30">
                       <div className="flex items-center justify-between">
                         <span className="text-muted-foreground">Royalty Earned:</span>
-                        <span className="font-semibold text-foreground">
+                        <span className="font-semibold text-foreground font-mono">
                           {formatINR(book.totalRoyaltyEarned)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-muted-foreground">Royalty Paid:</span>
-                        <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                        <span className="font-semibold text-emerald-700 dark:text-emerald-400 font-mono">
                           {formatINR(book.royaltyPaid)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-muted-foreground">Royalty Pending:</span>
-                        <span className="font-semibold text-amber-600 dark:text-amber-400">
+                        <span className="font-semibold text-amber-700 dark:text-amber-400 font-mono">
                           {formatINR(book.royaltyPending)}
                         </span>
                       </div>
                       {book.lastRoyaltyPayoutDate && (
-                        <div className="flex items-center justify-between pt-1 border-t border-border/40 text-[11px]">
+                        <div className="flex items-center justify-between pt-1.5 border-t border-border/40 text-[11px]">
                           <span className="text-muted-foreground">Last Payout:</span>
                           <span className="text-foreground">
                             {formatDate(book.lastRoyaltyPayoutDate)}
@@ -173,7 +173,7 @@ export function AuthorBookFactsCard({ ticket }: AuthorBookFactsCardProps) {
                     )}
 
                     {book.availableOn && book.availableOn.length > 0 && (
-                      <div className="space-y-1">
+                      <div className="space-y-1.5">
                         <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
                           <Globe className="h-3 w-3 shrink-0" />
                           <span>Distribution:</span>
@@ -182,7 +182,7 @@ export function AuthorBookFactsCard({ ticket }: AuthorBookFactsCardProps) {
                           {book.availableOn.map((plat: string) => (
                             <span
                               key={plat}
-                              className="px-1.5 py-0.5 rounded text-[10px] bg-muted text-muted-foreground border border-border"
+                              className="px-2 py-0.5 rounded text-[10px] bg-muted/80 text-muted-foreground font-medium"
                             >
                               {plat}
                             </span>
@@ -202,7 +202,7 @@ export function AuthorBookFactsCard({ ticket }: AuthorBookFactsCardProps) {
                       currentStageIndex={book.productionStage?.currentStageIndex}
                       rawStatus={book.status}
                     />
-                    <div className="text-[11px] text-muted-foreground bg-muted/40 p-2 rounded border border-border/50">
+                    <div className="text-[11px] text-muted-foreground bg-muted/50 p-2.5 rounded-lg">
                       No royalties are earned or tracked during the production phase.
                     </div>
                   </div>
@@ -217,8 +217,8 @@ export function AuthorBookFactsCard({ ticket }: AuthorBookFactsCardProps) {
               <span className="text-xs font-semibold text-foreground">
                 Author Portfolio Summary
               </span>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-muted text-muted-foreground border border-border font-medium">
-                General Query
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/60 font-medium">
+                General / Account Level
               </span>
             </div>
 
@@ -230,45 +230,45 @@ export function AuthorBookFactsCard({ ticket }: AuthorBookFactsCardProps) {
             ) : authorSummary ? (
               <div className="space-y-2 text-xs">
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="p-2 rounded bg-muted/40 border border-border/50">
-                    <span className="text-[10px] text-muted-foreground">Total Books</span>
-                    <div className="font-semibold text-foreground">
+                  <div className="p-2.5 rounded-lg bg-muted/40">
+                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Total Books</span>
+                    <div className="font-semibold text-foreground font-mono">
                       {authorSummary.bookCount}
                     </div>
                   </div>
-                  <div className="p-2 rounded bg-muted/40 border border-border/50">
-                    <span className="text-[10px] text-muted-foreground">Published</span>
-                    <div className="font-semibold text-foreground">
+                  <div className="p-2.5 rounded-lg bg-muted/40">
+                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Published</span>
+                    <div className="font-semibold text-foreground font-mono">
                       {authorSummary.publishedCount}
                     </div>
                   </div>
                 </div>
 
-                <div className="p-2.5 rounded-md bg-muted/30 border border-border/50 space-y-1.5">
+                <div className="p-2.5 rounded-lg bg-muted/30 space-y-1.5">
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Total Earned:</span>
-                    <span className="font-semibold text-foreground">
+                    <span className="font-semibold text-foreground font-mono">
                       {formatINR(authorSummary.totalEarned)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Total Paid:</span>
-                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                    <span className="font-semibold text-emerald-700 dark:text-emerald-400 font-mono">
                       {formatINR(authorSummary.totalPaid)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Total Pending:</span>
-                    <span className="font-semibold text-amber-600 dark:text-amber-400">
+                    <span className="font-semibold text-amber-700 dark:text-amber-400 font-mono">
                       {formatINR(authorSummary.totalPending)}
                     </span>
                   </div>
                 </div>
 
                 {authorSummary.pendingBelowThreshold && (
-                  <div className="flex items-start gap-1.5 p-2 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-[11px]">
-                    <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                    <span>
+                  <div className="flex items-start gap-1.5 p-2.5 rounded-xl bg-amber-500/10 text-amber-900 dark:text-amber-200 border border-amber-500/20 text-xs shadow-xs">
+                    <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-700 dark:text-amber-400" />
+                    <span className="leading-relaxed">
                       Pending royalties are below the ₹1,000 threshold and will roll over to the next payout window.
                     </span>
                   </div>

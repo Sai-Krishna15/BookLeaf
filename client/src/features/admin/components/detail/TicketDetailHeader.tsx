@@ -75,8 +75,8 @@ export function TicketDetailHeader({ ticket }: TicketDetailHeaderProps) {
         </div>
 
         {ticket.needsManualTriage && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
-            <AlertTriangle className="h-3 w-3" />
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-900 dark:text-amber-200 border border-amber-500/30 shadow-xs">
+            <AlertTriangle className="h-3 w-3 text-amber-700 dark:text-amber-400" />
             Needs Triage
           </span>
         )}

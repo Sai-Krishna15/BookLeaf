@@ -9,27 +9,31 @@ interface PriorityBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
 
 const priorityConfig: Record<
   Priority,
-  { label: string; className: string }
+  { label: string; className: string; dotClass: string }
 > = {
   CRITICAL: {
     label: 'Critical',
     className:
-      'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800',
+      'bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800',
+    dotClass: 'bg-rose-600 dark:bg-rose-400',
   },
   HIGH: {
     label: 'High',
     className:
-      'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:border-orange-800',
+      'bg-orange-50 text-orange-800 border-orange-200 dark:bg-orange-950/60 dark:text-orange-300 dark:border-orange-800',
+    dotClass: 'bg-orange-600 dark:bg-orange-400',
   },
   MEDIUM: {
     label: 'Medium',
     className:
-      'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800',
+      'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800',
+    dotClass: 'bg-amber-600 dark:bg-amber-400',
   },
   LOW: {
     label: 'Low',
     className:
-      'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
+      'bg-stone-100 text-stone-700 border-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-700',
+    dotClass: 'bg-stone-400 dark:bg-stone-500',
   },
 };
 
@@ -40,13 +44,14 @@ export function PriorityBadge({ priority, className, ...props }: PriorityBadgePr
   return (
     <span
       className={cn(
-        'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors',
+        'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border shadow-xs transition-colors',
         config.className,
         className,
       )}
       {...props}
     >
-      {config.label}
+      <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', config.dotClass)} aria-hidden="true" />
+      <span>{config.label}</span>
     </span>
   );
 }

@@ -68,17 +68,17 @@ export function AiAnalysisCard({ ticket }: AiAnalysisCardProps) {
   };
 
   return (
-    <Card className="shadow-sm border-border bg-card">
-      <CardHeader className="pb-3 border-b border-border/50">
+    <Card className="shadow-xs border-border bg-card rounded-xl">
+      <CardHeader className="pb-3 border-b border-border/60">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
-            <Sparkles className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+          <CardTitle className="text-xs font-semibold flex items-center gap-1.5 uppercase tracking-wider text-muted-foreground">
+            <Sparkles className="h-3.5 w-3.5 text-primary" />
             <span>AI Triage Analysis</span>
           </CardTitle>
 
           <span
             className={cn(
-              'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border',
+              'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border shadow-xs',
               currentStatusConfig.className,
             )}
           >
@@ -91,12 +91,12 @@ export function AiAnalysisCard({ ticket }: AiAnalysisCardProps) {
       <CardContent className="pt-4 space-y-3">
         {/* Fallback Yellow Banner when Failed or Skipped */}
         {(isFailed || isSkipped) && (
-          <div className="p-2.5 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800 text-xs space-y-1">
-            <div className="flex items-center gap-1.5 font-semibold">
-              <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+          <div className="p-3 rounded-xl bg-amber-500/10 text-amber-900 dark:text-amber-200 border border-amber-500/20 text-xs space-y-1 shadow-xs">
+            <div className="flex items-center gap-1.5 font-semibold text-amber-900 dark:text-amber-300">
+              <AlertCircle className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
               <span>AI Classification Unavailable</span>
             </div>
-            <p className="text-[11px] leading-relaxed text-amber-800 dark:text-amber-300">
+            <p className="text-xs leading-relaxed text-amber-900/90 dark:text-amber-300/90">
               {ticket.aiError ||
                 'AI classification was unavailable or skipped for this ticket. You can categorize manually or retry.'}
             </p>
@@ -109,7 +109,7 @@ export function AiAnalysisCard({ ticket }: AiAnalysisCardProps) {
             <button
               type="button"
               onClick={() => setReasoningOpen((v) => !v)}
-              className="flex items-center justify-between w-full text-xs font-medium text-muted-foreground hover:text-foreground text-left py-0.5"
+              className="flex items-center justify-between w-full text-xs font-medium text-muted-foreground hover:text-foreground text-left py-0.5 transition-colors"
             >
               <span>AI Classification Reasoning</span>
               {reasoningOpen ? (
@@ -120,7 +120,7 @@ export function AiAnalysisCard({ ticket }: AiAnalysisCardProps) {
             </button>
 
             {reasoningOpen && (
-              <div className="p-2.5 rounded-md bg-muted/50 border border-border text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap break-words">
+              <div className="p-3 rounded-xl bg-muted/40 border border-border/80 text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap break-words">
                 {ticket.aiReasoning}
               </div>
             )}
@@ -135,7 +135,7 @@ export function AiAnalysisCard({ ticket }: AiAnalysisCardProps) {
             size="sm"
             onClick={handleRetryReclassify}
             disabled={isPending}
-            className="w-full text-xs h-8 gap-1.5"
+            className="w-full text-xs h-8 gap-1.5 shadow-xs"
           >
             <RefreshCw className={cn('h-3.5 w-3.5', isPending && 'animate-spin')} />
             {isPending ? 'Classifying Ticket...' : 'Retry Reclassify'}

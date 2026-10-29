@@ -137,15 +137,21 @@ export function AdminTicketDetailPage() {
           </Card>
 
           {/* Action Tabs: Reply to Author vs Internal Staff Notes */}
-          <Card className="shadow-sm border-border bg-card">
+          <Card className="shadow-xs border-border bg-card rounded-xl">
             <CardContent className="pt-4">
               <Tabs defaultValue="reply" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 mb-4">
-                  <TabsTrigger value="reply" className="gap-1.5 text-xs font-medium">
+                <TabsList className="grid w-full grid-cols-2 mb-4 bg-muted/60 p-1 rounded-xl">
+                  <TabsTrigger
+                    value="reply"
+                    className="gap-1.5 text-xs font-medium rounded-lg data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs"
+                  >
                     <MessageSquare className="h-3.5 w-3.5" />
                     <span>Reply to Author</span>
                   </TabsTrigger>
-                  <TabsTrigger value="notes" className="gap-1.5 text-xs font-medium text-amber-900 dark:text-amber-300">
+                  <TabsTrigger
+                    value="notes"
+                    className="gap-1.5 text-xs font-medium rounded-lg text-amber-900 dark:text-amber-300 data-[state=active]:bg-card data-[state=active]:text-amber-800 dark:data-[state=active]:text-amber-200 data-[state=active]:shadow-xs"
+                  >
                     <Lock className="h-3.5 w-3.5" />
                     <span>Internal Staff Note</span>
                   </TabsTrigger>
