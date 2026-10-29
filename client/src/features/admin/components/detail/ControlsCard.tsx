@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { UserCheck, Sparkles } from 'lucide-react';
+import { UserCheck, Sparkles, AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Select,
@@ -14,6 +14,7 @@ import { SourceMarker } from '../SourceMarker';
 import { useAdmins, useAssignMe, usePatchTicket } from '../../hooks/useAdmin';
 import { useAuth } from '@/features/auth/useAuth';
 import type { AdminTicket, AdminUser, Priority, TicketCategory, TicketStatus } from '../../types';
+import { toast } from 'sonner';
 
 interface ControlsCardProps {
   ticket: AdminTicket;
@@ -28,15 +29,31 @@ export function ControlsCard({ ticket, onCategoryChanged }: ControlsCardProps) {
 
   const [categoryChangedNotice, setCategoryChangedNotice] = React.useState(false);
 
-  const isAssignedToMe = Boolean(user?.id && ticket.assignedToId === user.id);
+  const assignedId = ticket.assignedToId || ticket.assignedTo?.id || null;
+  const isAssignedToMe = Boolean(user?.id && assignedId === user.id);
 
   const handleStatusChange = (value: string) => {
     const status = value as TicketStatus;
     if (status === ticket.status) return;
-    patchTicketMutation.mutate({
-      id: ticket.id,
-      payload: { status },
-    });
+    patchTicketMutation.mutate(
+      {
+        id: ticket.id,
+        payload: { status },
+      },
+      {
+        onSuccess: () => {
+          if (ticket.status === 'CLOSED' && (status === 'IN_PROGRESS' || status === 'OPEN')) {
+            toast.success(`Reopened ticket ${ticket.ticketNumber}`);
+          } else if (status === 'CLOSED') {
+            toast.success(`Closed ticket ${ticket.ticketNumber}`);
+          } else if (status === 'RESOLVED') {
+            toast.success(`Marked ticket ${ticket.ticketNumber} as Resolved`);
+          } else if (status === 'IN_PROGRESS') {
+            toast.success(`Marked ticket ${ticket.ticketNumber} as In Progress`);
+          }
+        },
+      },
+    );
   };
 
   const handleCategoryChange = (value: string) => {
@@ -66,12 +83,28 @@ export function ControlsCard({ ticket, onCategoryChanged }: ControlsCardProps) {
   };
 
   const handleAssigneeChange = (value: string) => {
-    const assignedToId = value === 'unassigned' ? null : value;
-    if (assignedToId === ticket.assignedToId) return;
-    patchTicketMutation.mutate({
-      id: ticket.id,
-      payload: { assignedToId },
-    });
+    const newAssignedToId = value === 'unassigned' ? null : value;
+    if (newAssignedToId === assignedId) return;
+    patchTicketMutation.mutate(
+      {
+        id: ticket.id,
+        payload: { assignedToId: newAssignedToId },
+      },
+      {
+        onSuccess: () => {
+          if (!newAssignedToId) {
+            toast.success(`Unassigned ticket ${ticket.ticketNumber}`);
+          } else {
+            const adminName = admins?.find((a) => a.id === newAssignedToId)?.name;
+            toast.success(
+              adminName
+                ? `Assigned ticket ${ticket.ticketNumber} to ${adminName}`
+                : `Updated assignment for ${ticket.ticketNumber}`,
+            );
+          }
+        },
+      },
+    );
   };
 
   const handleAssignToMe = () => {
@@ -106,12 +139,42 @@ export function ControlsCard({ ticket, onCategoryChanged }: ControlsCardProps) {
               <SelectValue placeholder="Select status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="OPEN">Open</SelectItem>
-              <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
-              <SelectItem value="RESOLVED">Resolved</SelectItem>
-              <SelectItem value="CLOSED">Closed</SelectItem>
+              {ticket.status === 'CLOSED' ? (
+                <>
+                  <SelectItem value="CLOSED">Closed (Current)</SelectItem>
+                  <SelectItem value="IN_PROGRESS">Reopen (In Progress)</SelectItem>
+                  <SelectItem value="OPEN">Reopen (Open)</SelectItem>
+                </>
+              ) : ticket.status === 'RESOLVED' ? (
+                <>
+                  <SelectItem value="RESOLVED">Resolved (Current)</SelectItem>
+                  <SelectItem value="CLOSED">Close Ticket</SelectItem>
+                  <SelectItem value="IN_PROGRESS">Reopen (In Progress)</SelectItem>
+                  <SelectItem value="OPEN">Move to Open</SelectItem>
+                </>
+              ) : ticket.status === 'IN_PROGRESS' ? (
+                <>
+                  <SelectItem value="IN_PROGRESS">In Progress (Current)</SelectItem>
+                  <SelectItem value="RESOLVED">Mark Resolved</SelectItem>
+                  <SelectItem value="CLOSED">Close Ticket</SelectItem>
+                  <SelectItem value="OPEN">Move back to Open</SelectItem>
+                </>
+              ) : (
+                <>
+                  <SelectItem value="OPEN">Open (Current)</SelectItem>
+                  <SelectItem value="IN_PROGRESS">Mark In Progress</SelectItem>
+                  <SelectItem value="RESOLVED">Mark Resolved</SelectItem>
+                  <SelectItem value="CLOSED">Close Ticket</SelectItem>
+                </>
+              )}
             </SelectContent>
           </Select>
+          {ticket.status === 'CLOSED' && (
+            <div className="flex items-center gap-1.5 p-2 rounded-md bg-muted/60 text-muted-foreground text-[11px] border border-border/60">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <span>Ticket is closed. Select a reopen status above to resume replies.</span>
+            </div>
+          )}
         </div>
 
         {/* Category Dropdown */}
@@ -195,7 +258,12 @@ export function ControlsCard({ ticket, onCategoryChanged }: ControlsCardProps) {
             <Label htmlFor="control-assignee" className="text-xs font-medium text-muted-foreground">
               Assignee
             </Label>
-            {!isAssignedToMe && (
+            {isAssignedToMe ? (
+              <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                <UserCheck className="h-3 w-3" />
+                Assigned to you
+              </span>
+            ) : (
               <Button
                 type="button"
                 variant="ghost"
@@ -210,7 +278,7 @@ export function ControlsCard({ ticket, onCategoryChanged }: ControlsCardProps) {
             )}
           </div>
           <Select
-            value={ticket.assignedToId || 'unassigned'}
+            value={assignedId || 'unassigned'}
             onValueChange={handleAssigneeChange}
             disabled={patchTicketMutation.isPending || adminsLoading}
           >

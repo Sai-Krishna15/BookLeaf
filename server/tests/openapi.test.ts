@@ -1,5 +1,5 @@
 import path from 'node:path';
-import SwaggerParser from '@apidevtools/swagger-parser';
+import $RefParser from '@apidevtools/json-schema-ref-parser';
 import { describe, expect, it } from 'vitest';
 
 const SPEC = path.join(__dirname, '..', 'openapi.yaml');
@@ -33,19 +33,19 @@ const IMPLEMENTED: Array<[string, string]> = [
 
 describe('openapi.yaml', () => {
   it('is a valid OpenAPI 3 document (schema + all $refs resolve)', async () => {
-    const api = (await SwaggerParser.validate(SPEC)) as { openapi: string };
+    const api = (await $RefParser.dereference(SPEC)) as { openapi: string };
     expect(api.openapi).toMatch(/^3\./);
   });
 
   it('documents every implemented endpoint', async () => {
-    const api = (await SwaggerParser.validate(SPEC)) as { paths: Record<string, Record<string, unknown>> };
+    const api = (await $RefParser.dereference(SPEC)) as { paths: Record<string, Record<string, unknown>> };
     for (const [p, method] of IMPLEMENTED) {
       expect(api.paths[p]?.[method], `${method.toUpperCase()} ${p} missing from openapi.yaml`).toBeDefined();
     }
   });
 
   it('declares bearerAuth globally, with public endpoints opting out', async () => {
-    const api = (await SwaggerParser.validate(SPEC)) as {
+    const api = (await $RefParser.dereference(SPEC)) as {
       security: unknown[];
       components: { securitySchemes: Record<string, unknown>; schemas: Record<string, unknown> };
       paths: Record<string, Record<string, { security?: unknown[] }>>;

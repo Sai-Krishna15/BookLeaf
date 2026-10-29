@@ -61,6 +61,7 @@ export interface AdminTicketDto extends AuthorTicketDto {
   aiReasoning: string | null;
   aiError: string | null;
   needsManualTriage: boolean;
+  assignedToId: string | null;
   assignedTo: { id: string; name: string } | null;
   firstResponseAt: string | null;
   resolvedAt: string | null;
@@ -82,6 +83,7 @@ export function toAdminTicketDto(row: TicketRow, now: Date): AdminTicketDto {
     aiReasoning: row.aiReasoning ?? null,
     aiError: row.aiError ?? null,
     needsManualTriage: row.needsManualTriage,
+    assignedToId: row.assignedToId ?? row.assignee?.id ?? null,
     assignedTo: row.assignee ?? null,
     firstResponseAt: row.firstResponseAt?.toISOString() ?? null,
     resolvedAt: row.resolvedAt?.toISOString() ?? null,

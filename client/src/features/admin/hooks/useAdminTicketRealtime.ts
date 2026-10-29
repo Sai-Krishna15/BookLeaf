@@ -184,7 +184,9 @@ export function useAdminTicketRealtime() {
                     ? payload.needsManualTriage
                     : t.needsManualTriage,
                 assignedToId:
-                  payload.assignedToId !== undefined ? payload.assignedToId : t.assignedToId,
+                  payload.assignedToId !== undefined
+                    ? payload.assignedToId
+                    : (payload.assignedTo?.id !== undefined ? payload.assignedTo?.id : t.assignedToId),
                 assignedTo: payload.assignedTo !== undefined ? payload.assignedTo : t.assignedTo,
               };
             }),
@@ -208,7 +210,9 @@ export function useAdminTicketRealtime() {
               ? payload.needsManualTriage
               : old.needsManualTriage,
           assignedToId:
-            payload.assignedToId !== undefined ? payload.assignedToId : old.assignedToId,
+            payload.assignedToId !== undefined
+              ? payload.assignedToId
+              : (payload.assignedTo?.id !== undefined ? payload.assignedTo?.id : old.assignedToId),
           assignedTo: payload.assignedTo !== undefined ? payload.assignedTo : old.assignedTo,
         };
       });

@@ -30,6 +30,7 @@ export function useAdmins() {
 
 export function usePatchTicket() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: PatchTicketRequest }) =>
@@ -53,12 +54,25 @@ export function usePatchTicket() {
             ...old,
             data: old.data.map((t) => {
               if (t.id !== id) return t;
+              const newAssignedToId =
+                payload.assignedToId !== undefined
+                  ? payload.assignedToId
+                  : (t.assignedToId || t.assignedTo?.id || null);
+              let newAssignedTo = t.assignedTo;
+              if (payload.assignedToId !== undefined) {
+                if (payload.assignedToId === null) {
+                  newAssignedTo = null;
+                } else if (user && payload.assignedToId === user.id) {
+                  newAssignedTo = { id: user.id, name: user.name };
+                }
+              }
               return {
                 ...t,
                 status: payload.status ?? t.status,
                 category: payload.category ?? t.category,
                 priority: payload.priority ?? t.priority,
-                assignedToId: payload.assignedToId !== undefined ? payload.assignedToId : t.assignedToId,
+                assignedToId: newAssignedToId,
+                assignedTo: newAssignedTo,
                 needsManualTriage:
                   payload.category || payload.priority ? false : t.needsManualTriage,
                 categorySource: payload.category ? 'ADMIN' : t.categorySource,
@@ -77,13 +91,25 @@ export function usePatchTicket() {
 
       // Optimistically update detail query
       if (previousDetail) {
+        const newAssignedToId =
+          payload.assignedToId !== undefined
+            ? payload.assignedToId
+            : (previousDetail.assignedToId || previousDetail.assignedTo?.id || null);
+        let newAssignedTo = previousDetail.assignedTo;
+        if (payload.assignedToId !== undefined) {
+          if (payload.assignedToId === null) {
+            newAssignedTo = null;
+          } else if (user && payload.assignedToId === user.id) {
+            newAssignedTo = { id: user.id, name: user.name };
+          }
+        }
         queryClient.setQueryData<AdminTicket>(adminKeys.ticketDetail(id), {
           ...previousDetail,
           status: payload.status ?? previousDetail.status,
           category: payload.category ?? previousDetail.category,
           priority: payload.priority ?? previousDetail.priority,
-          assignedToId:
-            payload.assignedToId !== undefined ? payload.assignedToId : previousDetail.assignedToId,
+          assignedToId: newAssignedToId,
+          assignedTo: newAssignedTo,
           needsManualTriage:
             payload.category || payload.priority ? false : previousDetail.needsManualTriage,
           categorySource: payload.category ? 'ADMIN' : previousDetail.categorySource,
@@ -98,6 +124,19 @@ export function usePatchTicket() {
       }
 
       return { previousLists, previousDetail };
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(adminKeys.ticketDetail(data.id), data);
+      queryClient.setQueriesData<TicketListResponse<AdminTicket>>(
+        { queryKey: adminKeys.tickets() },
+        (old) => {
+          if (!old?.data) return old;
+          return {
+            ...old,
+            data: old.data.map((t) => (t.id === data.id ? { ...t, ...data } : t)),
+          };
+        },
+      );
     },
     onError: (err, { id }, context) => {
       // Rollback on error
@@ -170,6 +209,17 @@ export function useAssignMe() {
     },
     onSuccess: (data) => {
       toast.success(`Assigned ticket ${data.ticketNumber} to you`);
+      queryClient.setQueryData(adminKeys.ticketDetail(data.id), data);
+      queryClient.setQueriesData<TicketListResponse<AdminTicket>>(
+        { queryKey: adminKeys.tickets() },
+        (old) => {
+          if (!old?.data) return old;
+          return {
+            ...old,
+            data: old.data.map((t) => (t.id === data.id ? { ...t, ...data } : t)),
+          };
+        },
+      );
     },
     onError: (err, ticketId, context) => {
       if (context?.previousLists) {

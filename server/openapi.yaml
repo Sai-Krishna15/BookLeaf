@@ -1101,6 +1101,10 @@ components:
             aiReasoning: { type: string, nullable: true }
             aiError: { type: string, nullable: true }
             needsManualTriage: { type: boolean }
+            assignedToId:
+              type: string
+              nullable: true
+              description: Assigned admin user id, or null if unassigned.
             assignedTo:
               nullable: true
               description: Assigned admin user, or null if unassigned.

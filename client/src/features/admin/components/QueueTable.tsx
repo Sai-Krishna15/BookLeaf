@@ -72,7 +72,7 @@ export function QueueTable({
         header: 'Ticket',
         cell: ({ row }) => {
           const t = row.original;
-          const isUnassigned = !t.assignedToId;
+          const isUnassigned = !t.assignedToId && !t.assignedTo;
           return (
             <div className="flex items-center gap-1.5 whitespace-nowrap">
               <span

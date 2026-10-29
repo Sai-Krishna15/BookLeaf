@@ -67,8 +67,12 @@ export function useAdminTicketDetailRealtime({
     'ticket:updated',
     React.useCallback(
       (rawPayload: unknown) => {
-        const data = rawPayload as { ticketId: string; updatedBy?: string; ticket?: Partial<AdminTicket> };
-        if (!data || data.ticketId !== ticketId) return;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const data = rawPayload as any;
+        if (!data) return;
+
+        const incomingId = data.ticketId || data.id;
+        if (!incomingId || incomingId !== ticketId) return;
 
         const prev = queryClient.getQueryData<AdminTicket>(adminKeys.ticketDetail(ticketId));
 
@@ -76,10 +80,17 @@ export function useAdminTicketDetailRealtime({
           toast.info('Ticket metadata was updated by another team member');
         }
 
-        if (data.ticket && prev) {
+        const patch = data.ticket || data;
+        if (patch && prev) {
+          const newAssignedToId =
+            patch.assignedToId !== undefined
+              ? patch.assignedToId
+              : (patch.assignedTo?.id ?? prev.assignedToId);
           queryClient.setQueryData<AdminTicket>(adminKeys.ticketDetail(ticketId), {
             ...prev,
-            ...data.ticket,
+            ...patch,
+            assignedToId: newAssignedToId,
+            assignedTo: patch.assignedTo !== undefined ? patch.assignedTo : prev.assignedTo,
           });
         } else {
           queryClient.invalidateQueries({ queryKey: adminKeys.ticketDetail(ticketId) });
