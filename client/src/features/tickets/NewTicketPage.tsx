@@ -291,12 +291,12 @@ export function NewTicketPage() {
               />
 
               {/* Attachments UI */}
-              <div className="space-y-2 pt-1 border-t border-border/60">
+              {/* <div className="space-y-2 pt-1 border-t border-border/60">
                 <FormLabel className="text-xs font-semibold text-foreground">
                   Reference Attachments (Optional)
                 </FormLabel>
                 <FileDropzone files={attachments} onFilesChange={setAttachments} />
-              </div>
+              </div> */}
 
               {/* Action Buttons */}
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-border/60">
