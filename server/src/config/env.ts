@@ -19,7 +19,14 @@ const envSchema = z
     DATABASE_URL_TEST: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
     JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
     JWT_EXPIRES_IN: z.string().min(1).default('1d'),
-    CLIENT_ORIGIN: z.string().url(),
+    CLIENT_ORIGIN: z.preprocess(
+      (v) => {
+        if (typeof v === 'string' && v.trim() !== '') return v;
+        if (process.env.RENDER_EXTERNAL_URL) return process.env.RENDER_EXTERNAL_URL;
+        return 'http://localhost:5173';
+      },
+      z.string().url(),
+    ),
 
     GEMINI_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
     GEMINI_MODEL: z.string().min(1).default('gemini-2.5-flash-lite'),

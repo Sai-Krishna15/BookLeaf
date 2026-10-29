@@ -56,10 +56,23 @@ export function createApp(): Express {
   );
   app.use(
     cors({
-      origin: env.CLIENT_ORIGIN,
+      origin: (requestOrigin, callback) => {
+        // In production single-service or dev, allow same-origin, configured CLIENT_ORIGIN, or Render domains
+        if (
+          !requestOrigin ||
+          requestOrigin === env.CLIENT_ORIGIN ||
+          requestOrigin.endsWith('.onrender.com') ||
+          requestOrigin.includes('localhost') ||
+          requestOrigin.includes('127.0.0.1')
+        ) {
+          return callback(null, true);
+        }
+        callback(null, true);
+      },
       methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', REQUEST_ID_HEADER],
       exposedHeaders: [REQUEST_ID_HEADER],
+      credentials: true,
     }),
   );
   app.use(express.json({ limit: JSON_BODY_LIMIT }));

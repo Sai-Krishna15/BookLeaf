@@ -26,7 +26,18 @@ export function getSocketServer(): AppSocketServer | null {
 export function initSocketServer(server: HttpServer): AppSocketServer {
   const io: AppSocketServer = new SocketIOServer(server, {
     cors: {
-      origin: env.CLIENT_ORIGIN,
+      origin: (requestOrigin, callback) => {
+        if (
+          !requestOrigin ||
+          requestOrigin === env.CLIENT_ORIGIN ||
+          requestOrigin.endsWith('.onrender.com') ||
+          requestOrigin.includes('localhost') ||
+          requestOrigin.includes('127.0.0.1')
+        ) {
+          return callback(null, true);
+        }
+        callback(null, true);
+      },
       methods: ['GET', 'POST'],
       credentials: true,
     },
