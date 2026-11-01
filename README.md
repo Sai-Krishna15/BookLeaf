@@ -76,13 +76,17 @@ All accounts are pre-seeded in the database with identical credentials format fo
 
 ### 1. Repository Setup & Dependencies
 ```bash
-git clone https://github.com/your-username/bookleaf.git
-cd bookleaf
+git clone https://github.com/Sai-Krishna15/BookLeaf.git
+cd BookLeaf
 
-# Install server and client dependencies
-npm --prefix server install
-npm --prefix client install
+# Install all dependencies (root, server, and client via postinstall hook)
+npm install
 ```
+
+> **Prerequisite**: Requires **Node 22** (`node -v` >= 22.12.0) for modern Prisma and Vite engine support. If using NVM:
+> ```bash
+> nvm use 22
+> ```
 
 ### 2. Environment Configuration
 Create `.env` inside `server/` (refer to `server/.env.example`):
@@ -131,17 +135,34 @@ npm --prefix server run db:seed
 ```
 
 ### 4. Running the Development Servers
-Start both backend API and frontend Vite servers concurrently:
+
+You can start both backend API (port 4000) and frontend Vite server (port 5173) simultaneously using a single command:
+
 ```bash
-# Terminal 1: Backend API & Socket.IO server (Port 4000)
-npm --prefix server run dev
-
-# Terminal 2: Frontend client (Port 5173)
-npm --prefix client run dev
+# Run both Backend and Frontend concurrently
+npm run dev
 ```
-Visit `http://localhost:5173` to access the application.
 
-### 5. Running the Automated Test Suites
+* **Frontend UI**: `http://localhost:5173` (with hot module replacement / Vite HMR)
+* **Backend API & Swagger Docs**: `http://localhost:4000/api/v1` and `http://localhost:4000/api/docs`
+* **Vite Proxy**: In local development, Vite proxies all `/api/*` and `/socket.io/*` requests directly to `http://127.0.0.1:4000`, so no CORS configuration is needed.
+
+*(Alternatively, to run them in separate terminals: `npm run dev:server` in Terminal 1, and `npm run dev:client` in Terminal 2).*
+
+### 5. Running in Production Mode Locally (Single Service)
+
+To test the unified single-service build locally as it runs on Render:
+
+```bash
+# 1. Build both client and server into client/dist and server/dist
+npm run build
+
+# 2. Run migrations and start single Express server
+npm run start
+```
+Everything (Frontend SPA, REST API, WebSockets, and Swagger UI) will be served unified from `http://localhost:4000`.
+
+### 6. Running the Automated Test Suites
 BookLeaf includes end-to-end integration tests, security audits, and OpenAPI schema validation:
 ```bash
 # Run server test suite against test database
