@@ -21,5 +21,8 @@
   "dependencies": {
     "@neon/config": "^1.9.4",
     "@neon/env": "^1.6.5"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.6"
   }
 }
