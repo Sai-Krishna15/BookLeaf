@@ -132,30 +132,28 @@ export function createApp(): Express {
   app.use(`${API_PREFIX}/admin`, adminRouter);
   // Phase 6+: admin router (admin routers also use requireRole('ADMIN')).
 
-  // ---- PRODUCTION CLIENT SERVING (PROJECT_CONTEXT §2 & §10.1) ----
-  // Single-service deployment: serve client/dist static assets with SPA index.html fallback.
-  // Excluded for /api and /socket.io routes. Only active in production when client/dist exists.
-  if (env.NODE_ENV === 'production') {
-    const candidatePaths = [
-      path.resolve(process.cwd(), 'client/dist'),
-      path.resolve(process.cwd(), '../client/dist'),
-      path.resolve(__dirname, '../../../client/dist'),
-      path.resolve(__dirname, '../../client/dist'),
-    ];
-    const clientDistPath = candidatePaths.find((p) => fs.existsSync(p));
+  // ---- STATIC CLIENT SERVING (PROJECT_CONTEXT §2 & §10.1) ----
+  // Single-service deployment & local preview: serve client/dist static assets with SPA index.html fallback
+  // whenever client/dist exists (always active in production; also active in development when built).
+  const candidatePaths = [
+    path.resolve(process.cwd(), 'client/dist'),
+    path.resolve(process.cwd(), '../client/dist'),
+    path.resolve(__dirname, '../../../client/dist'),
+    path.resolve(__dirname, '../../client/dist'),
+  ];
+  const clientDistPath = candidatePaths.find((p) => fs.existsSync(p));
 
-    if (clientDistPath) {
-      app.use(express.static(clientDistPath));
-      app.use((req, res, next) => {
-        if (req.method !== 'GET') {
-          return next();
-        }
-        if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
-          return next();
-        }
-        res.sendFile(path.join(clientDistPath, 'index.html'));
-      });
-    }
+  if (clientDistPath) {
+    app.use(express.static(clientDistPath));
+    app.use((req, res, next) => {
+      if (req.method !== 'GET') {
+        return next();
+      }
+      if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
+        return next();
+      }
+      res.sendFile(path.join(clientDistPath, 'index.html'));
+    });
   }
 
   app.use(notFound);
